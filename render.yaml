@@ -1,0 +1,17 @@
+# Render Blueprint：一键部署 FitLens 后端
+# 使用：Render 控制台 → New → Blueprint → 选择本仓库 → 应用。
+# 密钥 DEEPSEEK_API_KEY 用 sync:false 标记，需你在 Render 控制台手动填写（不会写入仓库）。
+services:
+  - type: web
+    name: fitlens-server
+    runtime: node
+    rootDir: server
+    buildCommand: npm install
+    startCommand: npm start
+    plan: free
+    envVars:
+      - key: DEEPSEEK_API_KEY
+        sync: false # 部署后在 Render 控制台填入你的密钥（服务端密钥，不提交）
+      - key: ALLOWED_ORIGINS
+        value: https://Gsbdueheie.github.io
+      # PORT 由 Render 自动注入，无需配置
