@@ -6,7 +6,7 @@ compatibility_date = "2025-01-01"
 
 [[kv_namespaces]]
 binding = "FITLENS_KV"
-id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+id = "46b0854e0ab3463c9f9c7bb05042c417"
 
 [vars]
 # 允许跨域来源（逗号分隔）。生产改为你的前端域名，例如 https://Gsbdueheie.github.io
