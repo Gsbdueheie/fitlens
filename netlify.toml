@@ -1,0 +1,11 @@
+# Netlify 部署配置：一键部署 FitLens Web Demo
+# 使用方式：在 Netlify 关联本仓库后，或安装 netlify-cli 后运行 `netlify deploy --prod`
+[build]
+  command = "npx expo export --platform web"
+  publish = "dist"
+
+# SPA 单页应用：把所有路由重写到 index.html，支持刷新/深链
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

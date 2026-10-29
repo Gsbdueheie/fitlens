@@ -1,18 +1,59 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
-import { useColorScheme } from 'react-native';
+import { Stack } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import { ActivityIndicator, View } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { AnimatedSplashOverlay } from '@/components/animated-icon';
-import AppTabs from '@/components/app-tabs';
+import { AppProvider, useApp } from '@/context/app';
+import { useTheme } from '@/constants/theme';
 
-SplashScreen.preventAutoHideAsync();
-
-export default function TabLayout() {
-  const colorScheme = useColorScheme();
+function LoadingScreen() {
+  const { colors } = useTheme();
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <AnimatedSplashOverlay />
-      <AppTabs />
-    </ThemeProvider>
+    <View
+      style={{
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: colors.background,
+      }}
+    >
+      <ActivityIndicator size="large" color={colors.primary} />
+    </View>
+  );
+}
+
+function RootNavigator() {
+  const { ready, profile } = useApp();
+  const { dark } = useTheme();
+
+  if (!ready) return <LoadingScreen />;
+
+  return (
+    <>
+      <StatusBar style={dark ? 'light' : 'dark'} />
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Protected guard={!!profile}>
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="food-recognize" />
+          <Stack.Screen name="food-review" />
+          <Stack.Screen name="workout-edit" />
+          <Stack.Screen name="body-edit" />
+        </Stack.Protected>
+        <Stack.Protected guard={!profile}>
+          <Stack.Screen name="login" />
+          <Stack.Screen name="verify" />
+        </Stack.Protected>
+      </Stack>
+    </>
+  );
+}
+
+export default function RootLayout() {
+  return (
+    <SafeAreaProvider>
+      <AppProvider>
+        <RootNavigator />
+      </AppProvider>
+    </SafeAreaProvider>
   );
 }
