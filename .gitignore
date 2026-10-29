@@ -47,3 +47,7 @@ example
 # backend runtime data (keep server/data/foods.json committed)
 server/data/db.json
 server/data/db.json.tmp
+
+# Cloudflare Workers local dev artifacts
+.wrangler/
+server-cf/wrangler.local.toml

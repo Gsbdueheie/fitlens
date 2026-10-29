@@ -1,0 +1,14 @@
+# FitLens 后端（Cloudflare Workers）配置
+# 部署前：运行 `npx wrangler kv namespace create FITLENS_KV` 拿到 id，替换下面的占位符。
+name = "fitlens-server"
+main = "src/index.js"
+compatibility_date = "2025-01-01"
+
+[[kv_namespaces]]
+binding = "FITLENS_KV"
+id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+
+[vars]
+# 允许跨域来源（逗号分隔）。生产改为你的前端域名，例如 https://Gsbdueheie.github.io
+ALLOWED_ORIGINS = "*"
+# DEEPSEEK_API_KEY 是「密钥」，不要写在这里——用 `npx wrangler secret put DEEPSEEK_API_KEY` 注入

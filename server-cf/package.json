@@ -1,0 +1,14 @@
+{
+  "name": "fitlens-server-cf",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "FitLens 后端（Cloudflare Workers 版）：认证 + CAPTCHA + DeepSeek 视觉识别",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^3.90.0"
+  }
+}

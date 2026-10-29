@@ -65,9 +65,11 @@ src/            # Expo 前端（React Native + Expo Router，Web/移动端共用
   context/app.tsx  # 登录态 + 本地记录 CRUD
   services/api.ts  # 后端 API 客户端
   lib/          # 类型/日期/格式化/营养计算/存储/种子数据
-server/         # Node 后端（Express）
+server/         # 后端（Express，本地开发 / Node 主机）
   src/          # config/store/auth/captcha/rateLimit/deepseek/nutrition/app
   data/foods.json  # 内置食物营养表（每 100g 近似值）
+server-cf/      # 后端（Cloudflare Workers，同一套 API，供无法注册 Node 主机时使用）
+  src/index.js  # 认证(PBKDF2) + CAPTCHA + DeepSeek + 营养（KV 存储）
 docs/           # 产品方案 / AI 评估 / 指标 / 路线图 + 截图
 ```
 
@@ -119,13 +121,25 @@ npm run web                  # 浏览器打开 http://localhost:8081/fitlens/
 
 ### 后端（需你部署）
 
-后端需要运行 Node 的托管平台，推荐 [Render](https://render.com) 或 [Railway](https://railway.app)（免费层即可）：
+提供两种后端实现，部署任一种即可：
 
-1. 将 `server/` 目录部署为一个 Node Web Service，启动命令 `npm start`，端口 `4000`。
-2. 在平台的服务端环境变量中配置（**不要写进代码/仓库**）：
-   - `DEEPSEEK_API_KEY`
-   - `ALLOWED_ORIGINS=https://Gsbdueheie.github.io`（生产建议收紧）
-3. 拿到后端公网地址（如 `https://your-app.onrender.com`）。
+#### 方案 A：Cloudflare Workers（推荐，仅需邮箱注册，无需手机号/信用卡）
+
+```bash
+cd server-cf
+npm install
+npx wrangler login                    # 浏览器授权你的 Cloudflare 账号
+npx wrangler kv namespace create FITLENS_KV   # 记下返回的 id
+# 把 id 填进 wrangler.toml 的 [[kv_namespaces]].id
+npx wrangler secret put DEEPSEEK_API_KEY      # 粘贴你的新 Key（服务端密钥，不提交）
+npx wrangler deploy                   # 部署，得到 https://fitlens-server.<你的子域>.workers.dev
+```
+
+#### 方案 B：Node 主机（Render/Railway 等，`server/` 目录）
+
+把 `server/` 部署为 Node Web Service（启动命令 `npm start`），在平台服务端环境变量填 `DEEPSEEK_API_KEY`。已提供 `render.yaml`（Render Blueprint）。
+
+> 两个后端实现提供**完全相同的 API**，前端只需把 `EXPO_PUBLIC_API_URL` 指向其一。
 
 ### 联调
 
