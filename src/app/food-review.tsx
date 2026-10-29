@@ -10,6 +10,7 @@ import { formatPercent } from '@/lib/format';
 import { scalePer100, type Per100g } from '@/lib/nutrition';
 import { MEAL_LABEL, type FoodRecord, type MealType } from '@/lib/types';
 import { nowISO, round, uid } from '@/lib/util';
+import { api, ApiError } from '@/services/api';
 import { clearDraft, getDraft } from '@/services/ai/draft';
 
 const MEAL_ORDER: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack'];
@@ -28,38 +29,54 @@ export default function FoodReviewScreen() {
   const router = useRouter();
   const { editId } = useLocalSearchParams<{ editId?: string }>();
   const { colors } = useTheme();
-  const { foods, saveFood } = useApp();
+  const { session, foods, saveFood } = useApp();
 
   const existing = editId ? foods.find((f) => f.id === editId) : undefined;
   const [draft] = useState(() => getDraft());
-  const rec = draft?.result.items[0];
+  const rec = draft?.response.foods[0];
 
   const isEdit = !!existing;
   const isRecognize = !!draft && !isEdit;
   const title = isEdit ? '编辑饮食记录' : isRecognize ? '确认识别结果' : '手动记录';
 
-  const per100: Per100g | null = existing ? derivePer100(existing) : rec ? rec.per100 : null;
-  const initAmount = existing?.amountG ?? rec?.amountG ?? 200;
+  const initPer100: Per100g | null = existing
+    ? derivePer100(existing)
+    : rec?.nutrition && rec.amount > 0
+      ? {
+          calories: round((rec.nutrition.calories / rec.amount) * 100),
+          protein: round((rec.nutrition.protein / rec.amount) * 100, 1),
+          carbs: round((rec.nutrition.carbs / rec.amount) * 100, 1),
+          fat: round((rec.nutrition.fat / rec.amount) * 100, 1),
+        }
+      : null;
+
+  const initAmount = existing?.amountG ?? rec?.amount ?? 200;
   const initNutri = existing
     ? { calories: existing.calories, protein: existing.protein, carbs: existing.carbs, fat: existing.fat }
-    : rec
-      ? scalePer100(rec.per100, rec.amountG)
+    : rec?.nutrition
+      ? { calories: rec.nutrition.calories, protein: rec.nutrition.protein, carbs: rec.nutrition.carbs, fat: rec.nutrition.fat }
       : { calories: 0, protein: 0, carbs: 0, fat: 0 };
 
   const [mealType, setMealType] = useState<MealType>(existing?.mealType ?? 'lunch');
-  const [name, setName] = useState(existing?.foodName ?? rec?.foodName ?? '');
+  const [name, setName] = useState(existing?.foodName ?? rec?.name ?? '');
   const [amount, setAmount] = useState(String(initAmount));
   const [calories, setCalories] = useState(String(initNutri.calories));
   const [protein, setProtein] = useState(String(initNutri.protein));
   const [carbs, setCarbs] = useState(String(initNutri.carbs));
   const [fat, setFat] = useState(String(initNutri.fat));
+  const [per100, setPer100] = useState<Per100g | null>(initPer100);
+  const [nutritionSource, setNutritionSource] = useState<string | null>(
+    existing?.nutritionSource ?? rec?.nutrition?.source ?? null,
+  );
   const [nameError, setNameError] = useState<string | null>(null);
   const [calError, setCalError] = useState<string | null>(null);
+  const [estimating, setEstimating] = useState(false);
+  const [estimateMsg, setEstimateMsg] = useState<string | null>(null);
 
-  const isMock = existing?.isMock ?? draft?.result.isMock ?? false;
   const confidence = existing?.confidence ?? rec?.confidence ?? null;
-  const uncertaintyNote = existing?.uncertaintyNote ?? draft?.result.uncertaintyNote ?? null;
+  const uncertaintyNote = existing?.uncertaintyNote ?? draft?.response.uncertainty ?? null;
   const imageUri = existing?.imageUri ?? draft?.imageUri ?? null;
+  const ingredients = rec?.ingredients ?? [];
 
   function handleAmount(t: string) {
     setAmount(t);
@@ -72,6 +89,41 @@ export default function FoodReviewScreen() {
         setCarbs(String(s.carbs));
         setFat(String(s.fat));
       }
+    }
+  }
+
+  async function reestimate() {
+    if (!session?.token) return;
+    const a = parseFloat(amount);
+    if (!name.trim() || isNaN(a) || a <= 0) {
+      setEstimateMsg('请先填写食物名称和份量');
+      return;
+    }
+    setEstimating(true);
+    setEstimateMsg(null);
+    try {
+      const res = await api.nutrition(session.token, { name: name.trim(), amount: a });
+      if (res.nutrition) {
+        setCalories(String(res.nutrition.calories));
+        setProtein(String(res.nutrition.protein));
+        setCarbs(String(res.nutrition.carbs));
+        setFat(String(res.nutrition.fat));
+        setNutritionSource(res.nutrition.source);
+        setPer100({
+          calories: round((res.nutrition.calories / a) * 100),
+          protein: round((res.nutrition.protein / a) * 100, 1),
+          carbs: round((res.nutrition.carbs / a) * 100, 1),
+          fat: round((res.nutrition.fat / a) * 100, 1),
+        });
+        setEstimateMsg('已按食物库重新估算');
+      } else {
+        setNutritionSource(null);
+        setEstimateMsg('未查到该食物的营养数据，请手动填写热量与营养素');
+      }
+    } catch (e) {
+      setEstimateMsg(e instanceof ApiError ? e.message : '估算失败');
+    } finally {
+      setEstimating(false);
     }
   }
 
@@ -105,9 +157,10 @@ export default function FoodReviewScreen() {
       carbs: round(parseFloat(carbs) || 0, 1),
       fat: round(parseFloat(fat) || 0, 1),
       source: existing?.source ?? (draft ? 'ai' : 'manual'),
-      isMock,
+      isMock: false,
       confidence,
       uncertaintyNote,
+      nutritionSource,
       imageUri,
       createdAt: existing?.createdAt ?? nowISO(),
       updatedAt: nowISO(),
@@ -123,32 +176,26 @@ export default function FoodReviewScreen() {
       {isRecognize && rec ? (
         <Card style={styles.infoCard}>
           <View style={styles.infoRow}>
-            {imageUri ? (
-              <Image source={{ uri: imageUri }} style={styles.thumb} resizeMode="cover" />
-            ) : null}
+            {imageUri ? <Image source={{ uri: imageUri }} style={styles.thumb} resizeMode="cover" /> : null}
             <View style={styles.infoBody}>
               <View style={styles.badgeRow}>
-                {isMock ? (
-                  <Badge label="模拟识别" color={colors.warning} icon="flask-outline" />
-                ) : (
-                  <Badge label="AI 识别" color={colors.primary} icon="sparkles-outline" />
-                )}
+                <Badge label="AI 识别" color={colors.primary} icon="sparkles-outline" />
                 {confidence != null ? (
                   <Badge label={`置信度 ${formatPercent(confidence)}`} color={colors.textMuted} />
                 ) : null}
+                {nutritionSource ? <Badge label="含营养估算" color={colors.success} /> : null}
               </View>
-              <Text style={[styles.uncertainty, { color: colors.textSecondary }]}>
-                {uncertaintyNote}
-              </Text>
+              <Text style={[styles.uncertainty, { color: colors.textSecondary }]}>{uncertaintyNote}</Text>
+              {ingredients.length > 0 ? (
+                <View style={styles.ingredients}>
+                  {ingredients.map((ing, i) => (
+                    <Chip key={i} label={ing} />
+                  ))}
+                </View>
+              ) : null}
             </View>
           </View>
         </Card>
-      ) : null}
-
-      {isEdit && existing?.isMock ? (
-        <View style={styles.editMock}>
-          <Badge label="模拟识别结果" color={colors.warning} icon="flask-outline" />
-        </View>
       ) : null}
 
       <Text style={[styles.label, { color: colors.textSecondary }]}>餐次</Text>
@@ -160,14 +207,25 @@ export default function FoodReviewScreen() {
 
       <View style={styles.formGap}>
         <Field label="食物名称" value={name} onChangeText={setName} placeholder="例如：鸡胸肉沙拉" error={nameError} />
-        <Field
-          label="份量"
-          value={amount}
-          onChangeText={handleAmount}
-          placeholder="克"
-          keyboardType="decimal-pad"
-          suffix="克"
-        />
+        <Field label="份量" value={amount} onChangeText={handleAmount} placeholder="克" keyboardType="decimal-pad" suffix="克" />
+        <View style={styles.estimateRow}>
+          <Button
+            title={estimating ? '估算中…' : '按食物库估算营养'}
+            variant="secondary"
+            icon="calculator-outline"
+            loading={estimating}
+            fullWidth={false}
+            onPress={reestimate}
+          />
+          {nutritionSource ? (
+            <Text style={[styles.source, { color: colors.textMuted }]} numberOfLines={2}>
+              来源：{nutritionSource}
+            </Text>
+          ) : null}
+        </View>
+        {estimateMsg ? (
+          <Text style={[styles.estimateMsg, { color: colors.textSecondary }]}>{estimateMsg}</Text>
+        ) : null}
         <Field label="热量" value={calories} onChangeText={setCalories} placeholder="kcal" keyboardType="decimal-pad" suffix="卡" error={calError} />
         <View style={styles.macroRow}>
           <View style={styles.macroCol}>
@@ -182,11 +240,9 @@ export default function FoodReviewScreen() {
         </View>
       </View>
 
-      {per100 ? (
-        <Text style={[styles.hint, { color: colors.textMuted }]}>
-          调整份量会按每 100g 营养值等比更新热量与营养素；你仍可手动修改任一数值。
-        </Text>
-      ) : null}
+      <Text style={[styles.hint, { color: colors.textMuted }]}>
+        热量为估算值，非精确测量。份量与用油、酱料、配方等无法从照片可靠判断，请确认后再保存。
+      </Text>
 
       <View style={styles.actions}>
         <Button title="保存记录" icon="checkmark" onPress={save} />
@@ -203,10 +259,13 @@ const styles = StyleSheet.create({
   infoBody: { flex: 1, gap: spacing.sm },
   badgeRow: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' },
   uncertainty: { fontSize: fontSize.xs, lineHeight: 17 },
-  editMock: { marginBottom: spacing.md },
+  ingredients: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
   label: { fontSize: fontSize.sm, fontWeight: '600', marginBottom: spacing.sm },
   mealRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.lg },
   formGap: { gap: 0 },
+  estimateRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.sm },
+  source: { flex: 1, fontSize: fontSize.xs },
+  estimateMsg: { fontSize: fontSize.xs, marginBottom: spacing.sm },
   macroRow: { flexDirection: 'row', gap: spacing.sm },
   macroCol: { flex: 1 },
   hint: { fontSize: fontSize.xs, lineHeight: 17, marginTop: -spacing.sm, marginBottom: spacing.lg },

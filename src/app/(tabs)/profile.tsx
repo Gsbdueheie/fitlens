@@ -10,20 +10,23 @@ import { confirmDialog } from '@/lib/confirm';
 import { KCAL_UNIT_NOTE } from '@/lib/format';
 import { GOAL_TARGET_NOTE } from '@/lib/nutrition';
 import { GOAL_LABEL, type Gender, type Goal } from '@/lib/types';
+import { ApiError } from '@/services/api';
 
 const GOALS: Goal[] = ['lose', 'maintain', 'gain'];
 
 export default function ProfileScreen() {
   const { colors } = useTheme();
-  const { profile, updateProfile, logout, seedSampleData, clearAll } = useApp();
+  const { profile, updateNickname, updatePrefs, logout, seedSampleData, clearAll } = useApp();
 
-  const [nickname, setNickname] = useState(profile?.nickname ?? 'FitLens 用户');
+  const [nickname, setNickname] = useState(profile?.nickname ?? '');
   const [goal, setGoal] = useState<Goal>(profile?.goal ?? 'lose');
   const [target, setTarget] = useState(profile?.targetKcal != null ? String(profile.targetKcal) : '');
   const [height, setHeight] = useState(profile?.heightCm != null ? String(profile.heightCm) : '');
   const [age, setAge] = useState(profile?.age != null ? String(profile.age) : '');
   const [gender, setGender] = useState<Gender>(profile?.gender ?? null);
+  const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function pickAvatar() {
     const res = await ImagePicker.launchImageLibraryAsync({
@@ -38,7 +41,7 @@ export default function ProfileScreen() {
     const uri = asset.base64
       ? `data:${asset.mimeType ?? 'image/jpeg'};base64,${asset.base64}`
       : asset.uri;
-    await updateProfile({ avatarUri: uri });
+    await updatePrefs({ avatarUri: uri });
   }
 
   async function saveProfile() {
@@ -46,22 +49,30 @@ export default function ProfileScreen() {
     const heightNum = height.trim() === '' ? null : parseFloat(height);
     const ageNum = age.trim() === '' ? null : parseInt(age, 10);
 
-    await updateProfile({
-      nickname: nickname.trim() || 'FitLens 用户',
-      goal,
-      targetKcal: targetNum != null && !isNaN(targetNum) && targetNum > 0 ? Math.round(targetNum) : null,
-      heightCm: heightNum != null && !isNaN(heightNum) && heightNum > 0 ? heightNum : null,
-      age: ageNum != null && !isNaN(ageNum) && ageNum > 0 ? ageNum : null,
-      gender,
-    });
-    setSaved(true);
-    setTimeout(() => setSaved(false), 1500);
+    setSaving(true);
+    setError(null);
+    try {
+      await updateNickname(nickname.trim() || 'FitLens 用户');
+      await updatePrefs({
+        goal,
+        targetKcal: targetNum != null && !isNaN(targetNum) && targetNum > 0 ? Math.round(targetNum) : null,
+        heightCm: heightNum != null && !isNaN(heightNum) && heightNum > 0 ? heightNum : null,
+        age: ageNum != null && !isNaN(ageNum) && ageNum > 0 ? ageNum : null,
+        gender,
+      });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 1500);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : '保存失败，请重试');
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
     <Screen>
       <View style={styles.stack}>
-        {/* 头像 + 昵称 */}
+        {/* 头像 + 账号 */}
         <Card>
           <View style={styles.avatarRow}>
             <Pressable onPress={pickAvatar} accessibilityRole="button" accessibilityLabel="更换头像">
@@ -77,11 +88,9 @@ export default function ProfileScreen() {
               </View>
             </Pressable>
             <View style={styles.avatarInfo}>
-              <Text style={[styles.phone, { color: colors.textSecondary }]}>
-                {profile?.phone ? `${profile.phone.slice(0, 3)}****${profile.phone.slice(7)}` : 'Demo 账号'}
-              </Text>
+              <Text style={[styles.email, { color: colors.textSecondary }]}>{profile?.email ?? ''}</Text>
               <View style={styles.badgeRow}>
-                <Badge label="Demo 登录" color={colors.warning} icon="flask-outline" />
+                <Badge label="已登录" color={colors.success} icon="shield-checkmark-outline" />
               </View>
             </View>
           </View>
@@ -135,8 +144,10 @@ export default function ProfileScreen() {
             ))}
           </View>
 
+          {error ? <Text style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}
+
           <View style={styles.saveRow}>
-            <Button title={saved ? '已保存 ✓' : '保存资料'} icon={saved ? 'checkmark' : 'save-outline'} onPress={saveProfile} />
+            <Button title={saved ? '已保存 ✓' : '保存资料'} icon={saved ? 'checkmark' : 'save-outline'} loading={saving} onPress={saveProfile} />
           </View>
         </Card>
 
@@ -154,13 +165,13 @@ export default function ProfileScreen() {
           <View style={styles.bulletRow}>
             <Text style={[styles.bullet, { color: colors.textMuted }]}>·</Text>
             <Text style={[styles.bulletText, { color: colors.textSecondary }]}>
-              本演示的数据保存在当前设备（浏览器 localStorage / 原生 AsyncStorage），不构成正式账号系统，无法跨设备同步。
+              账号与密码由服务端安全存储；训练/饮食/身体记录当前保存在本机（单设备），跨设备同步尚未实现。
             </Text>
           </View>
           <View style={styles.bulletRow}>
             <Text style={[styles.bullet, { color: colors.textMuted }]}>·</Text>
             <Text style={[styles.bulletText, { color: colors.textSecondary }]}>
-              食物识别在 Demo 中为模拟结果（不读取图片内容），已明确标注；真实多模态模型需后端接入。
+              食物识别由 DeepSeek 视觉模型完成，热量为估算值，请以「确认/修正」为准。
             </Text>
           </View>
         </Card>
@@ -169,12 +180,7 @@ export default function ProfileScreen() {
         <Card>
           <SectionTitle title="数据管理" style={styles.cardTitle} />
           <View style={styles.manageRows}>
-            <Button
-              title="加载示例数据"
-              variant="secondary"
-              icon="sparkles-outline"
-              onPress={() => seedSampleData()}
-            />
+            <Button title="加载示例数据" variant="secondary" icon="sparkles-outline" onPress={() => seedSampleData()} />
             <Button
               title="清除本机数据"
               variant="secondary"
@@ -187,12 +193,12 @@ export default function ProfileScreen() {
               title="退出登录"
               variant="danger"
               icon="log-out-outline"
-              onPress={() => confirmDialog('退出登录', '退出后本机记录仍会保留，确定退出？', () => logout())}
+              onPress={() => confirmDialog('退出登录', '确定退出当前账号吗？', () => logout())}
             />
           </View>
         </Card>
 
-        <Text style={[styles.version, { color: colors.textMuted }]}>FitLens · Demo v1.0.0</Text>
+        <Text style={[styles.version, { color: colors.textMuted }]}>FitLens · v1.1.0</Text>
       </View>
     </Screen>
   );
@@ -204,24 +210,17 @@ const styles = StyleSheet.create({
   avatar: { width: 72, height: 72, borderRadius: radius.pill },
   avatarPlaceholder: { alignItems: 'center', justifyContent: 'center' },
   cameraBadge: {
-    position: 'absolute',
-    right: -2,
-    bottom: -2,
-    width: 24,
-    height: 24,
-    borderRadius: radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#fff',
+    position: 'absolute', right: -2, bottom: -2, width: 24, height: 24, borderRadius: radius.pill,
+    alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#fff',
   },
   avatarInfo: { gap: spacing.sm },
-  phone: { fontSize: fontSize.md, fontWeight: '600' },
+  email: { fontSize: fontSize.md, fontWeight: '600' },
   badgeRow: { flexDirection: 'row', gap: spacing.sm },
   cardTitle: { marginTop: 0 },
   label: { fontSize: fontSize.sm, fontWeight: '600', marginBottom: spacing.sm, marginTop: spacing.md },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.md },
   formGap: { gap: 0 },
+  error: { fontSize: fontSize.sm, marginTop: spacing.sm },
   saveRow: { marginTop: spacing.md },
   bulletRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm },
   bullet: { width: 8 },

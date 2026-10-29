@@ -1,0 +1,16 @@
+{
+  "name": "fitlens-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "FitLens 后端：账号认证 + CAPTCHA + DeepSeek 视觉识别 + 营养估算",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "express": "^4.19.2"
+  }
+}

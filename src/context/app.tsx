@@ -13,22 +13,52 @@ import {
   ManualBurn,
   UserProfile,
   WorkoutRecord,
+  type Gender,
+  type Goal,
 } from '@/lib/types';
 import { loadJSON, saveJSON, clearAllData, STORAGE_KEYS } from '@/lib/storage';
 import { buildSeedData } from '@/lib/seed';
-import { nowISO, uid } from '@/lib/util';
+import { uid } from '@/lib/util';
+import { api, type ServerUser } from '@/services/api';
+
+export interface Session {
+  token: string;
+  user: ServerUser;
+}
+
+export interface Prefs {
+  goal: Goal;
+  targetKcal: number | null;
+  heightCm: number | null;
+  age: number | null;
+  gender: Gender;
+  avatarUri: string | null;
+}
+
+const DEFAULT_PREFS: Prefs = {
+  goal: 'lose',
+  targetKcal: null,
+  heightCm: null,
+  age: null,
+  gender: null,
+  avatarUri: null,
+};
 
 export interface AppState {
   ready: boolean;
-  profile: UserProfile | null;
+  session: Session | null;
+  prefs: Prefs;
+  profile: UserProfile | null; // 由 session + prefs 派生的视图对象
   workouts: WorkoutRecord[];
   foods: FoodRecord[];
   measurements: BodyMeasurement[];
   manualBurns: ManualBurn[];
 
-  demoLogin: (phone: string | null) => Promise<void>;
+  login: (email: string, password: string, captchaId: string, captchaInput: string) => Promise<void>;
+  register: (email: string, password: string, nickname: string, captchaId: string, captchaInput: string) => Promise<void>;
   logout: () => Promise<void>;
-  updateProfile: (patch: Partial<UserProfile>) => Promise<void>;
+  updateNickname: (nickname: string) => Promise<void>;
+  updatePrefs: (patch: Partial<Prefs>) => Promise<void>;
 
   saveWorkout: (record: WorkoutRecord) => Promise<void>;
   deleteWorkout: (id: string) => Promise<void>;
@@ -45,25 +75,10 @@ export interface AppState {
 
 const AppContext = createContext<AppState | null>(null);
 
-function defaultProfile(phone: string | null): UserProfile {
-  return {
-    phone,
-    nickname: 'FitLens 用户',
-    avatarUri: null,
-    goal: 'lose',
-    targetKcal: null,
-    heightCm: null,
-    age: null,
-    gender: null,
-    isDemo: true,
-    createdAt: nowISO(),
-    updatedAt: nowISO(),
-  };
-}
-
 export function AppProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
-  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
+  const [prefs, setPrefs] = useState<Prefs>(DEFAULT_PREFS);
   const [workouts, setWorkouts] = useState<WorkoutRecord[]>([]);
   const [foods, setFoods] = useState<FoodRecord[]>([]);
   const [measurements, setMeasurements] = useState<BodyMeasurement[]>([]);
@@ -72,15 +87,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const [p, w, f, m, b] = await Promise.all([
-        loadJSON<UserProfile | null>(STORAGE_KEYS.profile, null),
+      const [s, p, w, f, m, b] = await Promise.all([
+        loadJSON<Session | null>(STORAGE_KEYS.session, null),
+        loadJSON<Prefs>(STORAGE_KEYS.prefs, DEFAULT_PREFS),
         loadJSON<WorkoutRecord[]>(STORAGE_KEYS.workouts, []),
         loadJSON<FoodRecord[]>(STORAGE_KEYS.foods, []),
         loadJSON<BodyMeasurement[]>(STORAGE_KEYS.measurements, []),
         loadJSON<ManualBurn[]>(STORAGE_KEYS.manualBurns, []),
       ]);
       if (cancelled) return;
-      setProfile(p);
+      setSession(s);
+      setPrefs({ ...DEFAULT_PREFS, ...p });
       setWorkouts(w);
       setFoods(f);
       setMeasurements(m);
@@ -92,40 +109,60 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const api = useMemo<AppState>(() => {
-    async function demoLogin(phone: string | null) {
-      const p = defaultProfile(phone);
-      setProfile(p);
-      await saveJSON(STORAGE_KEYS.profile, p);
-      const empty =
-        workouts.length === 0 &&
-        foods.length === 0 &&
-        measurements.length === 0;
-      if (empty) {
-        const seed = buildSeedData();
-        setWorkouts(seed.workouts);
-        setFoods(seed.foods);
-        setMeasurements(seed.measurements);
-        setManualBurns(seed.manualBurns);
-        await Promise.all([
-          saveJSON(STORAGE_KEYS.workouts, seed.workouts),
-          saveJSON(STORAGE_KEYS.foods, seed.foods),
-          saveJSON(STORAGE_KEYS.measurements, seed.measurements),
-          saveJSON(STORAGE_KEYS.manualBurns, seed.manualBurns),
-        ]);
-      }
+  const profile = useMemo<UserProfile | null>(() => {
+    if (!session) return null;
+    return {
+      email: session.user.email,
+      nickname: session.user.nickname,
+      avatarUri: prefs.avatarUri,
+      goal: prefs.goal,
+      targetKcal: prefs.targetKcal,
+      heightCm: prefs.heightCm,
+      age: prefs.age,
+      gender: prefs.gender,
+    };
+  }, [session, prefs]);
+
+  const apiState = useMemo<AppState>(() => {
+    async function login(email: string, password: string, captchaId: string, captchaInput: string) {
+      const res = await api.login({ email, password, captchaId, captchaInput });
+      const s: Session = { token: res.token, user: res.user };
+      setSession(s);
+      await saveJSON(STORAGE_KEYS.session, s);
+    }
+
+    async function register(email: string, password: string, nickname: string, captchaId: string, captchaInput: string) {
+      const res = await api.register({ email, password, nickname, captchaId, captchaInput });
+      const s: Session = { token: res.token, user: res.user };
+      setSession(s);
+      await saveJSON(STORAGE_KEYS.session, s);
     }
 
     async function logout() {
-      setProfile(null);
-      await saveJSON(STORAGE_KEYS.profile, null);
+      const token = session?.token;
+      if (token) {
+        try {
+          await api.logout(token);
+        } catch {
+          // 网络失败时仍允许本地退出
+        }
+      }
+      setSession(null);
+      await saveJSON(STORAGE_KEYS.session, null);
     }
 
-    async function updateProfile(patch: Partial<UserProfile>) {
-      setProfile((prev) => {
-        if (!prev) return prev;
-        const next = { ...prev, ...patch, updatedAt: nowISO() };
-        saveJSON(STORAGE_KEYS.profile, next);
+    async function updateNickname(nickname: string) {
+      const token = session?.token;
+      if (!token) return;
+      const res = await api.updateMe(token, { nickname });
+      setSession((prev) => (prev ? { ...prev, user: res.user } : prev));
+      await saveJSON(STORAGE_KEYS.session, { token, user: res.user });
+    }
+
+    async function updatePrefs(patch: Partial<Prefs>) {
+      setPrefs((prev) => {
+        const next = { ...prev, ...patch };
+        saveJSON(STORAGE_KEYS.prefs, next);
         return next;
       });
     }
@@ -133,10 +170,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     async function saveWorkout(record: WorkoutRecord) {
       setWorkouts((prev) => {
         const idx = prev.findIndex((x) => x.id === record.id);
-        const next =
-          idx >= 0
-            ? prev.map((x, i) => (i === idx ? record : x))
-            : [record, ...prev];
+        const next = idx >= 0 ? prev.map((x, i) => (i === idx ? record : x)) : [record, ...prev];
         saveJSON(STORAGE_KEYS.workouts, next);
         return next;
       });
@@ -153,10 +187,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     async function saveFood(record: FoodRecord) {
       setFoods((prev) => {
         const idx = prev.findIndex((x) => x.id === record.id);
-        const next =
-          idx >= 0
-            ? prev.map((x, i) => (i === idx ? record : x))
-            : [record, ...prev];
+        const next = idx >= 0 ? prev.map((x, i) => (i === idx ? record : x)) : [record, ...prev];
         saveJSON(STORAGE_KEYS.foods, next);
         return next;
       });
@@ -173,10 +204,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     async function saveMeasurement(record: BodyMeasurement) {
       setMeasurements((prev) => {
         const idx = prev.findIndex((x) => x.id === record.id);
-        const next =
-          idx >= 0
-            ? prev.map((x, i) => (i === idx ? record : x))
-            : [record, ...prev];
+        const next = idx >= 0 ? prev.map((x, i) => (i === idx ? record : x)) : [record, ...prev];
         saveJSON(STORAGE_KEYS.measurements, next);
         return next;
       });
@@ -193,10 +221,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     async function saveManualBurn(record: ManualBurn) {
       setManualBurns((prev) => {
         const idx = prev.findIndex((x) => x.id === record.id);
-        const next =
-          idx >= 0
-            ? prev.map((x, i) => (i === idx ? record : x))
-            : [record, ...prev];
+        const next = idx >= 0 ? prev.map((x, i) => (i === idx ? record : x)) : [record, ...prev];
         saveJSON(STORAGE_KEYS.manualBurns, next);
         return next;
       });
@@ -225,7 +250,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
 
     async function clearAll() {
-      setProfile(null);
+      setSession(null);
+      setPrefs(DEFAULT_PREFS);
       setWorkouts([]);
       setFoods([]);
       setMeasurements([]);
@@ -235,14 +261,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     return {
       ready,
+      session,
+      prefs,
       profile,
       workouts,
       foods,
       measurements,
       manualBurns,
-      demoLogin,
+      login,
+      register,
       logout,
-      updateProfile,
+      updateNickname,
+      updatePrefs,
       saveWorkout,
       deleteWorkout,
       saveFood,
@@ -254,9 +284,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       seedSampleData,
       clearAll,
     };
-  }, [ready, profile, workouts, foods, measurements, manualBurns]);
+  }, [ready, session, prefs, profile, workouts, foods, measurements, manualBurns]);
 
-  return <AppContext.Provider value={api}>{children}</AppContext.Provider>;
+  return <AppContext.Provider value={apiState}>{children}</AppContext.Provider>;
 }
 
 export function useApp(): AppState {

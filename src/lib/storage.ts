@@ -8,7 +8,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
  */
 
 export const STORAGE_KEYS = {
-  profile: 'fitlens.profile',
+  session: 'fitlens.session', // 服务端登录会话（token + 用户信息）
+  prefs: 'fitlens.prefs', // 本地偏好（目标/身高/年龄/性别/头像）
   workouts: 'fitlens.workouts',
   foods: 'fitlens.foods',
   measurements: 'fitlens.measurements',

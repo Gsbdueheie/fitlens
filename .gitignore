@@ -43,3 +43,7 @@ example
 # generated native folders
 /ios
 /android
+
+# backend runtime data (keep server/data/foods.json committed)
+server/data/db.json
+server/data/db.json.tmp

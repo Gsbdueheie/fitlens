@@ -10,7 +10,7 @@ export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
 export type Mood = 'great' | 'ok' | 'tired' | null;
 
 export interface UserProfile {
-  phone: string | null;
+  email: string | null;
   nickname: string;
   avatarUri: string | null; // 本地图片 / data URL（仅保存在本机）
   goal: Goal;
@@ -18,17 +18,14 @@ export interface UserProfile {
   heightCm: number | null;
   age: number | null;
   gender: Gender;
-  isDemo: boolean; // 是否 Demo 登录（未接入真实短信/后端）
-  createdAt: string;
-  updatedAt: string;
 }
 
 export interface WorkoutRecord {
   id: string;
   date: string; // YYYY-MM-DD
-  type: string; // 训练类型（力量 / 有氧 / 跑步 / 瑜伽 / 骑行 / 其他）
+  type: string; // 训练类型（力量/跑步/骑行/游泳/瑜伽/爬坡/跑楼梯/其他）
   durationMin: number;
-  caloriesBurned: number | null; // kcal，可为空（未填则不参与消耗汇总）
+  caloriesBurned: number | null; // kcal，可为空（未填写时界面显示「未记录」，不伪造）
   note: string;
   mood: Mood;
   isSample?: boolean; // 是否为预置示例数据
@@ -46,10 +43,11 @@ export interface FoodRecord {
   protein: number; // g
   carbs: number; // g
   fat: number; // g
-  source: 'ai' | 'manual'; // ai = 拍照识别（含模拟）；manual = 手动录入
-  isMock: boolean; // 是否为模拟识别结果
+  source: 'ai' | 'manual'; // ai = 拍照识别；manual = 手动录入
+  isMock: boolean; // 兼容字段：接入真实模型后恒为 false
   confidence: number | null; // 0..1，模型置信度；手动录入为 null
   uncertaintyNote: string | null; // 估算依据 / 不确定性说明
+  nutritionSource: string | null; // 营养数据来源说明
   imageUri: string | null; // 识别所用图片（本机 URI/data URL）
   isSample?: boolean;
   createdAt: string;
@@ -88,6 +86,31 @@ export interface DailySummary {
   fat: number;
 }
 
+/* ------------------------- AI 识别（后端返回） ------------------------- */
+
+export interface NutritionEstimate {
+  source: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+}
+
+export interface RecognizedFood {
+  name: string;
+  amount: number; // 估算份量克数
+  ingredients: string[];
+  confidence: number; // 0..1
+  nutrition: NutritionEstimate | null;
+}
+
+export interface RecognizeResponse {
+  foods: RecognizedFood[];
+  uncertainty: string;
+}
+
+/* ------------------------------ 常量标签 ------------------------------ */
+
 export const GOAL_LABEL: Record<Goal, string> = {
   lose: '减脂',
   gain: '增肌',
@@ -109,11 +132,11 @@ export const MOOD_LABEL: Record<Exclude<Mood, null>, string> = {
 
 export const WORKOUT_TYPES = [
   '力量训练',
-  '有氧',
   '跑步',
-  '瑜伽',
   '骑行',
   '游泳',
-  '球类',
+  '瑜伽',
+  '爬坡',
+  '跑楼梯',
   '其他',
 ] as const;

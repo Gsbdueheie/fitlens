@@ -201,21 +201,27 @@ export function Field({
   suffix,
   multiline = false,
   maxLength,
+  secureTextEntry = false,
+  autoCapitalize = 'sentences',
 }: {
-  label: string;
+  label?: string;
   value: string;
   onChangeText: (t: string) => void;
   placeholder?: string;
-  keyboardType?: 'default' | 'number-pad' | 'phone-pad' | 'decimal-pad' | 'numeric';
+  keyboardType?: 'default' | 'number-pad' | 'phone-pad' | 'decimal-pad' | 'numeric' | 'email-address';
   error?: string | null;
   suffix?: string;
   multiline?: boolean;
   maxLength?: number;
+  secureTextEntry?: boolean;
+  autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
 }) {
   const { colors } = useTheme();
   return (
     <View style={styles.field}>
-      <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>{label}</Text>
+      {label ? (
+        <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>{label}</Text>
+      ) : null}
       <View
         style={[
           styles.fieldInputWrap,
@@ -233,7 +239,9 @@ export function Field({
           keyboardType={keyboardType}
           multiline={multiline}
           maxLength={maxLength}
-          accessibilityLabel={label}
+          secureTextEntry={secureTextEntry}
+          autoCapitalize={autoCapitalize}
+          accessibilityLabel={label || placeholder}
           style={[
             styles.fieldInput,
             { color: colors.text },

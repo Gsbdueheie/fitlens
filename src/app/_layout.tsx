@@ -23,7 +23,7 @@ function LoadingScreen() {
 }
 
 function RootNavigator() {
-  const { ready, profile } = useApp();
+  const { ready, session } = useApp();
   const { dark } = useTheme();
 
   if (!ready) return <LoadingScreen />;
@@ -32,16 +32,15 @@ function RootNavigator() {
     <>
       <StatusBar style={dark ? 'light' : 'dark'} />
       <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Protected guard={!!profile}>
+        <Stack.Protected guard={!!session}>
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="food-recognize" />
           <Stack.Screen name="food-review" />
           <Stack.Screen name="workout-edit" />
           <Stack.Screen name="body-edit" />
         </Stack.Protected>
-        <Stack.Protected guard={!profile}>
+        <Stack.Protected guard={!session}>
           <Stack.Screen name="login" />
-          <Stack.Screen name="verify" />
         </Stack.Protected>
       </Stack>
     </>

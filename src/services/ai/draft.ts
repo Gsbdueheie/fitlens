@@ -1,10 +1,10 @@
-import type { FoodRecognitionResult } from './types';
+import type { RecognizeResponse } from '@/lib/types';
 
 /** 识别结果暂存（内存态），用于「识别页 → 确认页」之间传递数据。 */
 
 export interface RecognitionDraft {
   imageUri: string;
-  result: FoodRecognitionResult;
+  response: RecognizeResponse;
 }
 
 let draft: RecognitionDraft | null = null;
