@@ -3,5 +3,18 @@
     "source.fixAll": "explicit",
     "source.organizeImports": "explicit",
     "source.sortMembers": "explicit"
+  },
+  "files.exclude": {
+    "**/.wrangler": true,
+    "**/.expo": true,
+    "**/dist": true
+  },
+  "search.exclude": {
+    "**/.wrangler": true,
+    "**/.expo": true,
+    "**/dist": true
+  },
+  "files.watcherExclude": {
+    "**/.wrangler": true
   }
 }
