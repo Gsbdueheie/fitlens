@@ -15,6 +15,9 @@ import { clearDraft, getDraft } from '@/services/ai/draft';
 
 const MEAL_ORDER: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack'];
 
+const PORTION_REF =
+  '份量参考：一碗米饭≈200g · 一个鸡蛋≈50g · 一掌心瘦肉≈100g · 一个苹果≈180g · 一杯牛奶≈250ml';
+
 function derivePer100(r: FoodRecord): Per100g {
   const a = r.amountG > 0 ? r.amountG : 100;
   return {
@@ -77,6 +80,7 @@ export default function FoodReviewScreen() {
   const uncertaintyNote = existing?.uncertaintyNote ?? draft?.response.uncertainty ?? null;
   const imageUri = existing?.imageUri ?? draft?.imageUri ?? null;
   const ingredients = rec?.ingredients ?? [];
+  const portion = rec?.portion ?? '';
 
   function handleAmount(t: string) {
     setAmount(t);
@@ -208,6 +212,10 @@ export default function FoodReviewScreen() {
       <View style={styles.formGap}>
         <Field label="食物名称" value={name} onChangeText={setName} placeholder="例如：鸡胸肉沙拉" error={nameError} />
         <Field label="份量" value={amount} onChangeText={handleAmount} placeholder="克" keyboardType="decimal-pad" suffix="克" />
+        {portion ? (
+          <Text style={[styles.portionHint, { color: colors.textSecondary }]}>模型估算：{portion}</Text>
+        ) : null}
+        <Text style={[styles.portionRef, { color: colors.textMuted }]}>{PORTION_REF}</Text>
         <View style={styles.estimateRow}>
           <Button
             title={estimating ? '估算中…' : '按食物库估算营养'}
@@ -268,6 +276,8 @@ const styles = StyleSheet.create({
   estimateMsg: { fontSize: fontSize.xs, marginBottom: spacing.sm },
   macroRow: { flexDirection: 'row', gap: spacing.sm },
   macroCol: { flex: 1 },
+  portionHint: { fontSize: fontSize.sm, marginTop: -spacing.xs, marginBottom: spacing.xs },
+  portionRef: { fontSize: fontSize.xs, lineHeight: 17, marginBottom: spacing.sm },
   hint: { fontSize: fontSize.xs, lineHeight: 17, marginTop: -spacing.sm, marginBottom: spacing.lg },
   actions: { gap: spacing.md, marginTop: spacing.md },
 });

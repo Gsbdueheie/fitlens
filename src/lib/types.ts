@@ -99,6 +99,7 @@ export interface NutritionEstimate {
 export interface RecognizedFood {
   name: string;
   amount: number; // 估算份量克数
+  portion?: string; // 份量描述（约一碗/半盘/一个拳头大小）
   ingredients: string[];
   confidence: number; // 0..1
   nutrition: NutritionEstimate | null;
