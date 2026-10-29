@@ -26,8 +26,8 @@ jobs:
       - run: npm ci
       - run: npx expo export --platform web
         env:
-          # 后端公网地址（公开地址，非密钥）：在 GitHub 仓库 Settings → Secrets and variables → Actions → Variables 里配置
-          EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL }}
+          # 后端公网地址（公开地址，非密钥）
+          EXPO_PUBLIC_API_URL: https://fitlens-server.xyue1122.workers.dev
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
