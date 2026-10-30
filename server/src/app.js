@@ -16,14 +16,14 @@ app.use(
     origin: config.allowedOrigins.includes('*') ? true : config.allowedOrigins,
   }),
 );
-// 图片以 base64 传输，放宽 JSON 体积限制
-app.use(express.json({ limit: '8mb' }));
+// 图片以 base64 传输（20MB 原图 ≈ 27MB base64），放宽 JSON 体积限制
+app.use(express.json({ limit: '30mb' }));
 
 /* ------------------------------ 校验工具 ------------------------------ */
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const ALLOWED_MIME = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 
 function validEmail(e) {
   return typeof e === 'string' && EMAIL_RE.test(e.trim());
@@ -46,7 +46,7 @@ function validateImage(base64, mime) {
   }
   const bytes = Math.floor((base64.length * 3) / 4);
   if (bytes > MAX_IMAGE_BYTES) {
-    return { error: '图片过大（需小于 8MB）' };
+    return { error: '图片超过 20MB，请压缩或选择更小的图片' };
   }
   if (!/^[A-Za-z0-9+/=\r\n]+$/.test(base64)) {
     return { error: '图片数据编码无效' };

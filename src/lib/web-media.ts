@@ -7,7 +7,7 @@ import { Platform } from 'react-native';
  */
 
 export const ALLOWED_MIME = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-export const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+export const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 
 export function isWeb(): boolean {
   return Platform.OS === 'web' && typeof document !== 'undefined' && typeof window !== 'undefined';
@@ -51,7 +51,7 @@ export function pickWebImage(): Promise<{ ok: true; image: PickedImage } | { ok:
         return;
       }
       if (file.size > MAX_IMAGE_BYTES) {
-        done({ ok: false, error: '图片过大（需小于 8MB）' });
+        done({ ok: false, error: '图片超过 20MB，请压缩或选择更小的图片' });
         return;
       }
       try {

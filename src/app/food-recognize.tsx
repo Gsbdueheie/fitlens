@@ -12,6 +12,9 @@ import { api, ApiError } from '@/services/api';
 import { setDraft } from '@/services/ai/draft';
 import { isWeb, pickWebImage } from '@/lib/web-media';
 
+// 与后端保持一致：20MB（Web 端在 pickWebImage 内已校验，这里作为原生路径的统一兜底）。
+const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
+
 export default function FoodRecognizeScreen() {
   const router = useRouter();
   const { colors } = useTheme();
@@ -31,6 +34,11 @@ export default function FoodRecognizeScreen() {
     try {
       if (!base64) {
         setError('无法读取图片数据，请重新选择');
+        return;
+      }
+      const approxBytes = Math.floor((base64.length * 3) / 4);
+      if (approxBytes > MAX_IMAGE_BYTES) {
+        setError('图片超过 20MB，请压缩或选择更小的图片');
         return;
       }
       const response = await api.recognize(session.token, {

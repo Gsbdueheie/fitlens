@@ -72,15 +72,16 @@ export default function FoodReviewScreen() {
     ? { calories: existing.calories, protein: existing.protein, carbs: existing.carbs, fat: existing.fat }
     : rec?.nutrition
       ? { calories: rec.nutrition.calories, protein: rec.nutrition.protein, carbs: rec.nutrition.carbs, fat: rec.nutrition.fat }
-      : { calories: 0, protein: 0, carbs: 0, fat: 0 };
+      : null;
 
   const [mealType, setMealType] = useState<MealType>(existing?.mealType ?? 'lunch');
   const [name, setName] = useState(existing?.foodName ?? rec?.name ?? '');
   const [amount, setAmount] = useState(String(initAmount));
-  const [calories, setCalories] = useState(String(initNutri.calories));
-  const [protein, setProtein] = useState(String(initNutri.protein));
-  const [carbs, setCarbs] = useState(String(initNutri.carbs));
-  const [fat, setFat] = useState(String(initNutri.fat));
+  // 无可靠营养数据时留空，避免把「缺失」误显示/保存为 0。
+  const [calories, setCalories] = useState(initNutri ? String(initNutri.calories) : '');
+  const [protein, setProtein] = useState(initNutri ? String(initNutri.protein) : '');
+  const [carbs, setCarbs] = useState(initNutri ? String(initNutri.carbs) : '');
+  const [fat, setFat] = useState(initNutri ? String(initNutri.fat) : '');
   const [per100, setPer100] = useState<Per100g | null>(initPer100);
   const [nutritionSource, setNutritionSource] = useState<string | null>(
     existing?.nutritionSource ?? rec?.nutrition?.source ?? null,
@@ -217,7 +218,10 @@ export default function FoodReviewScreen() {
     } else {
       setNameError(null);
     }
-    if (isNaN(cal) || cal < 0) {
+    if (calories.trim() === '') {
+      setCalError('请填写热量，或点「搜索食物库」选用食物');
+      ok = false;
+    } else if (isNaN(cal) || cal < 0) {
       setCalError('请输入有效热量（≥ 0）');
       ok = false;
     } else {
