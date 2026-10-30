@@ -21,7 +21,14 @@ export async function register({ email, password, nickname }) {
     email,
     passwordHash,
     nickname: (nickname || '').trim() || email.split('@')[0],
+    goal: 'lose',
+    targetKcal: null,
+    heightCm: null,
+    weightKg: null,
+    age: null,
+    gender: null,
     createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   };
   await addUser(user);
 
@@ -71,5 +78,18 @@ export function authenticate(token) {
 }
 
 export function publicUser(u) {
-  return { id: u.id, email: u.email, nickname: u.nickname, createdAt: u.createdAt };
+  return {
+    id: u.id,
+    email: u.email,
+    nickname: u.nickname,
+    avatarUrl: u.avatarUrl ?? null, // 由 app.js 注入数据 URL
+    goal: u.goal ?? 'lose',
+    targetKcal: u.targetKcal ?? null,
+    heightCm: u.heightCm ?? null,
+    weightKg: u.weightKg ?? null,
+    age: u.age ?? null,
+    gender: u.gender ?? null,
+    createdAt: u.createdAt,
+    updatedAt: u.updatedAt ?? u.createdAt,
+  };
 }

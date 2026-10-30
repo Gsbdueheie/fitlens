@@ -12,12 +12,23 @@ export type Mood = 'great' | 'ok' | 'tired' | null;
 export interface UserProfile {
   email: string | null;
   nickname: string;
-  avatarUri: string | null; // 本地图片 / data URL（仅保存在本机）
+  avatarUrl: string | null; // 服务端存储的头像 data URL
   goal: Goal;
   targetKcal: number | null; // 每日目标摄入（kcal）。null 时按 goal 取默认值
   heightCm: number | null;
+  weightKg: number | null;
   age: number | null;
   gender: Gender;
+}
+
+/** 个人资料可更新字段（昵称单独经 updateNickname，其余经 updateProfile 持久化到服务端）。 */
+export interface ProfilePatch {
+  goal?: Goal;
+  targetKcal?: number | null;
+  heightCm?: number | null;
+  weightKg?: number | null;
+  age?: number | null;
+  gender?: Gender;
 }
 
 export interface WorkoutRecord {

@@ -569,8 +569,77 @@ async function createSession(env, user) {
   return s;
 }
 
+const GOALS = ['lose', 'gain', 'maintain'];
+const GENDERS = ['male', 'female'];
+const AVATAR_MIME = ['image/jpeg', 'image/png', 'image/webp'];
+const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
+
+function numInRange(v, min, max) {
+  if (v === null || v === undefined || v === '') return { ok: true, value: null };
+  const n = Number(v);
+  if (!Number.isFinite(n)) return { ok: false, value: null };
+  return { ok: n >= min && n <= max, value: Math.round(n) };
+}
+
+function sanitizeProfile(body) {
+  const patch = {};
+  if (body.nickname !== undefined) {
+    const nickname = String(body.nickname || '').trim().slice(0, 20);
+    if (!nickname) return { error: '昵称不能为空' };
+    patch.nickname = nickname;
+  }
+  if (body.goal !== undefined) {
+    if (!GOALS.includes(body.goal)) return { error: '健身目标无效' };
+    patch.goal = body.goal;
+  }
+  if (body.gender !== undefined) {
+    if (body.gender !== null && !GENDERS.includes(body.gender)) return { error: '性别无效' };
+    patch.gender = body.gender;
+  }
+  for (const [key, min, max, label] of [
+    ['targetKcal', 500, 10000, '每日目标摄入'],
+    ['heightCm', 50, 300, '身高'],
+    ['weightKg', 20, 400, '体重'],
+    ['age', 1, 120, '年龄'],
+  ]) {
+    if (body[key] !== undefined) {
+      const r = numInRange(body[key], min, max);
+      if (!r.ok) return { error: `${label}需在 ${min}–${max} 之间` };
+      patch[key] = r.value;
+    }
+  }
+  return { patch };
+}
+
+function validateAvatar(base64, mime) {
+  if (typeof base64 !== 'string' || base64.length < 100) return { error: '头像数据无效' };
+  if (!AVATAR_MIME.includes(mime || '')) return { error: '头像格式不支持，请使用 JPG/PNG/WebP' };
+  if (Math.floor((base64.length * 3) / 4) > MAX_AVATAR_BYTES) return { error: '头像过大（需小于 2MB）' };
+  if (!/^[A-Za-z0-9+/=\r\n]+$/.test(base64)) return { error: '头像数据编码无效' };
+  return { mime };
+}
+
 function publicUser(user) {
-  return { id: user.id, email: user.email, nickname: user.nickname, createdAt: user.createdAt };
+  return {
+    id: user.id,
+    email: user.email,
+    nickname: user.nickname,
+    avatarUrl: null,
+    goal: user.goal ?? 'lose',
+    targetKcal: user.targetKcal ?? null,
+    heightCm: user.heightCm ?? null,
+    weightKg: user.weightKg ?? null,
+    age: user.age ?? null,
+    gender: user.gender ?? null,
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt ?? user.createdAt,
+  };
+}
+
+async function publicUserWithAvatar(env, user) {
+  const pu = publicUser(user);
+  pu.avatarUrl = (await env.FITLENS_KV.get(`avatar:${user.id}`)) || null;
+  return pu;
 }
 
 /* ------------------------------ 路由 ------------------------------ */
@@ -634,11 +703,18 @@ const ROUTES = {
       email,
       passwordHash: await hashPassword(b.password),
       nickname: String(b.nickname || '').trim().slice(0, 20) || email.split('@')[0],
+      goal: 'lose',
+      targetKcal: null,
+      heightCm: null,
+      weightKg: null,
+      age: null,
+      gender: null,
       createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     };
     await putUser(env, user);
     const s = await createSession(env, user);
-    return json({ token: s.token, user: publicUser(user) }, 200, h);
+    return json({ token: s.token, user: await publicUserWithAvatar(env, user) }, 200, h);
   },
 
   'POST /api/auth/login': async (req, env, h) => {
@@ -659,7 +735,7 @@ const ROUTES = {
     if (!ok) return json({ error: '邮箱或密码错误' }, 401, h);
 
     const s = await createSession(env, user);
-    return json({ token: s.token, user: publicUser(user) }, 200, h);
+    return json({ token: s.token, user: await publicUserWithAvatar(env, user) }, 200, h);
   },
 
   'POST /api/auth/logout': async (req, env, h) => {
@@ -670,21 +746,41 @@ const ROUTES = {
 
   'GET /api/auth/me': async (req, env, h) => {
     const a = await requireAuth(req, env);
-    return json({ user: { id: a.session.userId, email: a.session.email, nickname: a.session.nickname } }, 200, h);
+    const user = await getUser(env, a.session.email);
+    if (!user) return json({ error: '未登录或会话已过期' }, 401, h);
+    return json({ user: await publicUserWithAvatar(env, user) }, 200, h);
   },
 
   'PATCH /api/auth/me': async (req, env, h) => {
     const a = await requireAuth(req, env);
     const b = await bodyJson(req);
-    const nickname = String(b.nickname || '').trim().slice(0, 20);
-    if (!nickname) return json({ error: '昵称不能为空' }, 400, h);
+    const { patch, error } = sanitizeProfile(b);
+    if (error) return json({ error }, 400, h);
     const user = await getUser(env, a.session.email);
-    if (user) {
-      user.nickname = nickname;
+    if (!user) return json({ error: '未登录或会话已过期' }, 401, h);
+    if (Object.keys(patch).length > 0) {
+      patch.updatedAt = new Date().toISOString();
+      Object.assign(user, patch);
       await putUser(env, user);
+      if (patch.nickname) await putSession(env, { ...a.session, nickname: patch.nickname });
     }
-    await putSession(env, { ...a.session, nickname });
-    return json({ user: { id: a.session.userId, email: a.session.email, nickname } }, 200, h);
+    return json({ user: await publicUserWithAvatar(env, user) }, 200, h);
+  },
+
+  'POST /api/avatar': async (req, env, h) => {
+    const a = await requireAuth(req, env);
+    const b = await bodyJson(req);
+    const av = validateAvatar(b.imageBase64, b.mimeType);
+    if (av.error) return json({ error: av.error }, 400, h);
+
+    const dataUrl = `data:${av.mime};base64,${b.imageBase64}`;
+    await env.FITLENS_KV.put(`avatar:${a.session.userId}`, dataUrl);
+
+    const user = await getUser(env, a.session.email);
+    if (!user) return json({ error: '未登录或会话已过期' }, 401, h);
+    user.updatedAt = new Date().toISOString();
+    await putUser(env, user);
+    return json({ user: await publicUserWithAvatar(env, user) }, 200, h);
   },
 
   'POST /api/recognize': async (req, env, h) => {

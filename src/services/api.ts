@@ -50,7 +50,15 @@ export interface ServerUser {
   id: string;
   email: string;
   nickname: string;
+  avatarUrl: string | null;
+  goal: 'lose' | 'gain' | 'maintain';
+  targetKcal: number | null;
+  heightCm: number | null;
+  weightKg: number | null;
+  age: number | null;
+  gender: 'male' | 'female' | null;
   createdAt: string;
+  updatedAt: string;
 }
 
 export const api = {
@@ -63,8 +71,10 @@ export const api = {
     request<{ token: string; user: ServerUser }>('/api/auth/login', { method: 'POST', body }),
   logout: (token: string) => request<{ ok: boolean }>('/api/auth/logout', { method: 'POST', token }),
   me: (token: string) => request<{ user: ServerUser }>('/api/auth/me', { token }),
-  updateMe: (token: string, body: { nickname: string }) =>
+  updateMe: (token: string, body: import('@/lib/types').ProfilePatch & { nickname?: string }) =>
     request<{ user: ServerUser }>('/api/auth/me', { method: 'PATCH', token, body }),
+  uploadAvatar: (token: string, body: { imageBase64: string; mimeType: string }) =>
+    request<{ user: ServerUser }>('/api/avatar', { method: 'POST', token, body }),
 
   recognize: (token: string, body: { imageBase64: string; mimeType: string }) =>
     request<{ foods: import('@/lib/types').RecognizedFood[]; uncertainty: string }>('/api/recognize', {

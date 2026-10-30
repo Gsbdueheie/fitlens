@@ -16,12 +16,13 @@ const GOALS: Goal[] = ['lose', 'maintain', 'gain'];
 
 export default function ProfileScreen() {
   const { colors } = useTheme();
-  const { profile, updateNickname, updatePrefs, logout, seedSampleData, clearAll } = useApp();
+  const { profile, updateNickname, updateProfile, updateAvatar, logout, seedSampleData, clearAll } = useApp();
 
   const [nickname, setNickname] = useState(profile?.nickname ?? '');
   const [goal, setGoal] = useState<Goal>(profile?.goal ?? 'lose');
   const [target, setTarget] = useState(profile?.targetKcal != null ? String(profile.targetKcal) : '');
   const [height, setHeight] = useState(profile?.heightCm != null ? String(profile.heightCm) : '');
+  const [weight, setWeight] = useState(profile?.weightKg != null ? String(profile.weightKg) : '');
   const [age, setAge] = useState(profile?.age != null ? String(profile.age) : '');
   const [gender, setGender] = useState<Gender>(profile?.gender ?? null);
   const [saving, setSaving] = useState(false);
@@ -29,6 +30,7 @@ export default function ProfileScreen() {
   const [error, setError] = useState<string | null>(null);
 
   async function pickAvatar() {
+    setError(null);
     const res = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       quality: 0.5,
@@ -38,25 +40,33 @@ export default function ProfileScreen() {
     });
     if (res.canceled || !res.assets?.length) return;
     const asset = res.assets[0];
-    const uri = asset.base64
-      ? `data:${asset.mimeType ?? 'image/jpeg'};base64,${asset.base64}`
-      : asset.uri;
-    await updatePrefs({ avatarUri: uri });
+    if (!asset.base64) {
+      setError('无法读取头像图片，请重试');
+      return;
+    }
+    try {
+      await updateAvatar(asset.base64, asset.mimeType ?? 'image/jpeg');
+    } catch (e) {
+      // 失败时原头像仍保留（未更新 session），仅提示错误
+      setError(e instanceof ApiError ? e.message : '头像上传失败，原头像已保留');
+    }
   }
 
   async function saveProfile() {
     const targetNum = target.trim() === '' ? null : parseFloat(target);
     const heightNum = height.trim() === '' ? null : parseFloat(height);
+    const weightNum = weight.trim() === '' ? null : parseFloat(weight);
     const ageNum = age.trim() === '' ? null : parseInt(age, 10);
 
     setSaving(true);
     setError(null);
     try {
       await updateNickname(nickname.trim() || 'FitLens 用户');
-      await updatePrefs({
+      await updateProfile({
         goal,
         targetKcal: targetNum != null && !isNaN(targetNum) && targetNum > 0 ? Math.round(targetNum) : null,
         heightCm: heightNum != null && !isNaN(heightNum) && heightNum > 0 ? heightNum : null,
+        weightKg: weightNum != null && !isNaN(weightNum) && weightNum > 0 ? weightNum : null,
         age: ageNum != null && !isNaN(ageNum) && ageNum > 0 ? ageNum : null,
         gender,
       });
@@ -76,8 +86,8 @@ export default function ProfileScreen() {
         <Card>
           <View style={styles.avatarRow}>
             <Pressable onPress={pickAvatar} accessibilityRole="button" accessibilityLabel="更换头像">
-              {profile?.avatarUri ? (
-                <Image source={{ uri: profile.avatarUri }} style={styles.avatar} />
+              {profile?.avatarUrl ? (
+                <Image source={{ uri: profile.avatarUrl }} style={styles.avatar} />
               ) : (
                 <View style={[styles.avatar, styles.avatarPlaceholder, { backgroundColor: colors.primarySoft }]}>
                   <Ionicons name="person" size={32} color={colors.primaryDeep} />
@@ -122,6 +132,13 @@ export default function ProfileScreen() {
               onChangeText={(t) => setHeight(t.replace(/[^\d.]/g, ''))}
               keyboardType="decimal-pad"
               suffix="cm"
+            />
+            <Field
+              label="体重（选填）"
+              value={weight}
+              onChangeText={(t) => setWeight(t.replace(/[^\d.]/g, ''))}
+              keyboardType="decimal-pad"
+              suffix="kg"
             />
             <Field
               label="年龄（选填）"

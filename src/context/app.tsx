@@ -13,42 +13,22 @@ import {
   ManualBurn,
   UserProfile,
   WorkoutRecord,
-  type Gender,
-  type Goal,
+  type ProfilePatch,
 } from '@/lib/types';
 import { loadJSON, saveJSON, clearAllData, STORAGE_KEYS } from '@/lib/storage';
 import { buildSeedData } from '@/lib/seed';
 import { uid } from '@/lib/util';
-import { api, type ServerUser } from '@/services/api';
+import { api, ApiError, type ServerUser } from '@/services/api';
 
 export interface Session {
   token: string;
   user: ServerUser;
 }
 
-export interface Prefs {
-  goal: Goal;
-  targetKcal: number | null;
-  heightCm: number | null;
-  age: number | null;
-  gender: Gender;
-  avatarUri: string | null;
-}
-
-const DEFAULT_PREFS: Prefs = {
-  goal: 'lose',
-  targetKcal: null,
-  heightCm: null,
-  age: null,
-  gender: null,
-  avatarUri: null,
-};
-
 export interface AppState {
   ready: boolean;
   session: Session | null;
-  prefs: Prefs;
-  profile: UserProfile | null; // 由 session + prefs 派生的视图对象
+  profile: UserProfile | null; // 由 session.user（服务端资料）派生
   workouts: WorkoutRecord[];
   foods: FoodRecord[];
   measurements: BodyMeasurement[];
@@ -58,7 +38,8 @@ export interface AppState {
   register: (email: string, password: string, nickname: string, captchaId: string, captchaInput: string) => Promise<void>;
   logout: () => Promise<void>;
   updateNickname: (nickname: string) => Promise<void>;
-  updatePrefs: (patch: Partial<Prefs>) => Promise<void>;
+  updateProfile: (patch: ProfilePatch) => Promise<void>;
+  updateAvatar: (imageBase64: string, mimeType: string) => Promise<void>;
 
   saveWorkout: (record: WorkoutRecord) => Promise<void>;
   deleteWorkout: (id: string) => Promise<void>;
@@ -78,7 +59,6 @@ const AppContext = createContext<AppState | null>(null);
 export function AppProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [session, setSession] = useState<Session | null>(null);
-  const [prefs, setPrefs] = useState<Prefs>(DEFAULT_PREFS);
   const [workouts, setWorkouts] = useState<WorkoutRecord[]>([]);
   const [foods, setFoods] = useState<FoodRecord[]>([]);
   const [measurements, setMeasurements] = useState<BodyMeasurement[]>([]);
@@ -87,9 +67,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const [s, p, w, f, m, b] = await Promise.all([
+      const [s, w, f, m, b] = await Promise.all([
         loadJSON<Session | null>(STORAGE_KEYS.session, null),
-        loadJSON<Prefs>(STORAGE_KEYS.prefs, DEFAULT_PREFS),
         loadJSON<WorkoutRecord[]>(STORAGE_KEYS.workouts, []),
         loadJSON<FoodRecord[]>(STORAGE_KEYS.foods, []),
         loadJSON<BodyMeasurement[]>(STORAGE_KEYS.measurements, []),
@@ -97,12 +76,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ]);
       if (cancelled) return;
       setSession(s);
-      setPrefs({ ...DEFAULT_PREFS, ...p });
       setWorkouts(w);
       setFoods(f);
       setMeasurements(m);
       setManualBurns(b);
       setReady(true);
+
+      // 服务端是资料数据源；登录态存在时后台刷新（本地缓存仅作快速显示）。
+      if (s?.token) {
+        try {
+          const res = await api.me(s.token);
+          if (cancelled) return;
+          const next = { token: s.token, user: res.user };
+          setSession(next);
+          await saveJSON(STORAGE_KEYS.session, next);
+        } catch (e) {
+          if (e instanceof ApiError && e.status === 401 && !cancelled) {
+            setSession(null);
+            await saveJSON(STORAGE_KEYS.session, null);
+          }
+          // 其他错误（网络失败等）：保留本地缓存，登录后可重试
+        }
+      }
     })();
     return () => {
       cancelled = true;
@@ -111,17 +106,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const profile = useMemo<UserProfile | null>(() => {
     if (!session) return null;
+    const u = session.user;
     return {
-      email: session.user.email,
-      nickname: session.user.nickname,
-      avatarUri: prefs.avatarUri,
-      goal: prefs.goal,
-      targetKcal: prefs.targetKcal,
-      heightCm: prefs.heightCm,
-      age: prefs.age,
-      gender: prefs.gender,
+      email: u.email,
+      nickname: u.nickname,
+      avatarUrl: u.avatarUrl,
+      goal: u.goal,
+      targetKcal: u.targetKcal,
+      heightCm: u.heightCm,
+      weightKg: u.weightKg,
+      age: u.age,
+      gender: u.gender,
     };
-  }, [session, prefs]);
+  }, [session]);
 
   const apiState = useMemo<AppState>(() => {
     async function login(email: string, password: string, captchaId: string, captchaInput: string) {
@@ -159,12 +156,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
       await saveJSON(STORAGE_KEYS.session, { token, user: res.user });
     }
 
-    async function updatePrefs(patch: Partial<Prefs>) {
-      setPrefs((prev) => {
-        const next = { ...prev, ...patch };
-        saveJSON(STORAGE_KEYS.prefs, next);
-        return next;
-      });
+    async function updateProfile(patch: ProfilePatch) {
+      const token = session?.token;
+      if (!token) return;
+      const res = await api.updateMe(token, patch);
+      setSession((prev) => (prev ? { ...prev, user: res.user } : prev));
+      await saveJSON(STORAGE_KEYS.session, { token, user: res.user });
+    }
+
+    async function updateAvatar(imageBase64: string, mimeType: string) {
+      const token = session?.token;
+      if (!token) return;
+      const res = await api.uploadAvatar(token, { imageBase64, mimeType });
+      setSession((prev) => (prev ? { ...prev, user: res.user } : prev));
+      await saveJSON(STORAGE_KEYS.session, { token, user: res.user });
     }
 
     async function saveWorkout(record: WorkoutRecord) {
@@ -251,7 +256,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     async function clearAll() {
       setSession(null);
-      setPrefs(DEFAULT_PREFS);
       setWorkouts([]);
       setFoods([]);
       setMeasurements([]);
@@ -262,7 +266,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return {
       ready,
       session,
-      prefs,
       profile,
       workouts,
       foods,
@@ -272,7 +275,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       register,
       logout,
       updateNickname,
-      updatePrefs,
+      updateProfile,
+      updateAvatar,
       saveWorkout,
       deleteWorkout,
       saveFood,
@@ -284,7 +288,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       seedSampleData,
       clearAll,
     };
-  }, [ready, session, prefs, profile, workouts, foods, measurements, manualBurns]);
+  }, [ready, session, profile, workouts, foods, measurements, manualBurns]);
 
   return <AppContext.Provider value={apiState}>{children}</AppContext.Provider>;
 }
