@@ -18,6 +18,13 @@ const MEAL_ORDER: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack'];
 const PORTION_REF =
   '份量参考：一碗米饭≈200g · 一个鸡蛋≈50g · 一掌心瘦肉≈100g · 一个苹果≈180g · 一杯牛奶≈250ml';
 
+// 份量档位：以模型估算克数为基准，按比例换算（小/中/大）。
+const PORTION_TIERS: { key: 'small' | 'medium' | 'large'; label: string; factor: number }[] = [
+  { key: 'small', label: '偏少', factor: 0.7 },
+  { key: 'medium', label: '适中', factor: 1 },
+  { key: 'large', label: '偏多', factor: 1.3 },
+];
+
 function derivePer100(r: FoodRecord): Per100g {
   const a = r.amountG > 0 ? r.amountG : 100;
   return {
@@ -81,6 +88,8 @@ export default function FoodReviewScreen() {
   const imageUri = existing?.imageUri ?? draft?.imageUri ?? null;
   const ingredients = rec?.ingredients ?? [];
   const portion = rec?.portion ?? '';
+  const baseAmount = rec?.amount ?? 200;
+  const [tier, setTier] = useState<'small' | 'medium' | 'large'>('medium');
 
   function handleAmount(t: string) {
     setAmount(t);
@@ -93,6 +102,20 @@ export default function FoodReviewScreen() {
         setCarbs(String(s.carbs));
         setFat(String(s.fat));
       }
+    }
+  }
+
+  /** 选择份量档位：以模型估算克数为基准，按比例换算并联动营养素。 */
+  function selectTier(factor: number, key: 'small' | 'medium' | 'large') {
+    setTier(key);
+    const v = Math.max(1, Math.round(baseAmount * factor));
+    setAmount(String(v));
+    if (per100) {
+      const s = scalePer100(per100, v);
+      setCalories(String(s.calories));
+      setProtein(String(s.protein));
+      setCarbs(String(s.carbs));
+      setFat(String(s.fat));
     }
   }
 
@@ -214,6 +237,21 @@ export default function FoodReviewScreen() {
         <Field label="份量" value={amount} onChangeText={handleAmount} placeholder="克" keyboardType="decimal-pad" suffix="克" />
         {portion ? (
           <Text style={[styles.portionHint, { color: colors.textSecondary }]}>模型估算：{portion}</Text>
+        ) : null}
+        {isRecognize ? (
+          <>
+            <Text style={[styles.label, { color: colors.textSecondary }]}>份量档位（照片无法精确称重，请选择）</Text>
+            <View style={styles.mealRow}>
+              {PORTION_TIERS.map((t) => (
+                <Chip
+                  key={t.key}
+                  label={t.label}
+                  selected={tier === t.key}
+                  onPress={() => selectTier(t.factor, t.key)}
+                />
+              ))}
+            </View>
+          </>
         ) : null}
         <Text style={[styles.portionRef, { color: colors.textMuted }]}>{PORTION_REF}</Text>
         <View style={styles.estimateRow}>

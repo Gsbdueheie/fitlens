@@ -199,7 +199,7 @@ export function MacroBar({
         {items.map((it) => (
           <View
             key={it.key}
-            style={{ width: `${(it.value / total) * 100}%`, backgroundColor: it.color, height: 10 }}
+            style={{ width: `${(it.value / total) * 100}%`, backgroundColor: it.color, height: 14, borderRadius: 7 }}
           />
         ))}
       </View>
@@ -217,12 +217,75 @@ export function MacroBar({
   );
 }
 
+/* ------------------------------ 环形进度（剩余热量） ------------------------------ */
+
+export function RingProgress({
+  value,
+  max,
+  color,
+  size = 168,
+  strokeWidth = 15,
+  label,
+  sublabel,
+}: {
+  value: number;
+  max: number;
+  color: string;
+  size?: number;
+  strokeWidth?: number;
+  label: string;
+  sublabel?: string;
+}) {
+  const { colors } = useTheme();
+  const r = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * r;
+  const pct = max > 0 ? Math.min(1, Math.max(0, value / max)) : 0;
+  const center = size / 2;
+
+  return (
+    <View style={{ width: size, height: size }}>
+      <Svg width={size} height={size}>
+        {/* 底环 */}
+        <Circle
+          cx={center}
+          cy={center}
+          r={r}
+          stroke={colors.surfaceAlt}
+          strokeWidth={strokeWidth}
+          fill="none"
+        />
+        {pct > 0 ? (
+          <Circle
+            cx={center}
+            cy={center}
+            r={r}
+            stroke={color}
+            strokeWidth={strokeWidth}
+            fill="none"
+            strokeLinecap="round"
+            strokeDasharray={`${circumference * pct} ${circumference}`}
+            transform={`rotate(-90 ${center} ${center})`}
+          />
+        ) : null}
+        <SvgText x={center} y={center} textAnchor="middle" fontSize={30} fontWeight="800" fill={color}>
+          {label}
+        </SvgText>
+        {sublabel ? (
+          <SvgText x={center} y={center + 20} textAnchor="middle" fontSize={11} fill={colors.textMuted}>
+            {sublabel}
+          </SvgText>
+        ) : null}
+      </Svg>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   macroWrap: { gap: spacing.sm },
   macroBar: {
     flexDirection: 'row',
-    height: 10,
-    borderRadius: 5,
+    height: 14,
+    borderRadius: 7,
     overflow: 'hidden',
     gap: 2,
   },

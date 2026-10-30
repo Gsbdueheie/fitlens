@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useState } from 'react';
 import {
   ActivityIndicator,
   Platform,
@@ -16,6 +17,30 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fontSize, radius, spacing, useTheme } from '@/constants/theme';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
+
+// Web 端输入框重置：去掉浏览器对 <input> 的默认 focus outline（会造成与圆角边框错位的“黑边”），
+// 并统一盒模型为 border-box，避免边框 + padding 撑破父容器宽度。
+const webInputReset: any =
+  Platform.OS === 'web'
+    ? { outlineWidth: 0, outlineStyle: 'none', boxSizing: 'border-box' }
+    : {};
+
+// 训练类型 → 线性图标（避免所有运动都用哑铃）。
+const WORKOUT_ICONS: Record<string, IoniconName> = {
+  力量训练: 'barbell',
+  跑步: 'walk',
+  骑行: 'bicycle',
+  游泳: 'water',
+  瑜伽: 'accessibility',
+  爬坡: 'trending-up',
+  跑楼梯: 'layers',
+  其他: 'fitness',
+};
+
+/** 按训练类型返回对应图标，未匹配时回退为哑铃。 */
+export function workoutIcon(type: string): IoniconName {
+  return WORKOUT_ICONS[type] ?? 'barbell';
+}
 
 /* ------------------------------- Screen ------------------------------- */
 
@@ -116,7 +141,7 @@ export function Card({
     <View
       style={[
         styles.card,
-        { backgroundColor: colors.surface, borderColor: colors.border },
+        { backgroundColor: colors.surface },
         style,
       ]}
     >
@@ -127,7 +152,7 @@ export function Card({
 
 /* ------------------------------- Button ------------------------------- */
 
-type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
+type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'dangerGhost';
 
 export function Button({
   title,
@@ -155,12 +180,14 @@ export function Button({
     secondary: colors.surfaceAlt,
     ghost: 'transparent',
     danger: colors.danger,
+    dangerGhost: `${colors.danger}14`, // 克制的浅红背景
   }[variant];
   const fg = {
     primary: colors.onPrimary,
     secondary: colors.text,
     ghost: colors.primary,
     danger: '#FFFFFF',
+    dangerGhost: colors.danger,
   }[variant];
   const border = variant === 'secondary' ? colors.border : 'transparent';
 
@@ -217,6 +244,8 @@ export function Field({
   autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
 }) {
   const { colors } = useTheme();
+  const [focused, setFocused] = useState(false);
+  const borderColor = error ? colors.danger : focused ? colors.primary : colors.border;
   return (
     <View style={styles.field}>
       {label ? (
@@ -225,15 +254,18 @@ export function Field({
       <View
         style={[
           styles.fieldInputWrap,
+          webInputReset,
           {
             backgroundColor: colors.surface,
-            borderColor: error ? colors.danger : colors.border,
+            borderColor,
           },
         ]}
       >
         <TextInput
           value={value}
           onChangeText={onChangeText}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
           placeholder={placeholder}
           placeholderTextColor={colors.textMuted}
           keyboardType={keyboardType}
@@ -244,6 +276,7 @@ export function Field({
           accessibilityLabel={label || placeholder}
           style={[
             styles.fieldInput,
+            webInputReset,
             { color: colors.text },
             multiline && styles.fieldInputMultiline,
           ]}
@@ -427,8 +460,13 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: fontSize.lg, fontWeight: '700' },
   card: {
     borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: spacing.lg,
+    padding: spacing.xl,
+    // 轻柔阴影替代硬朗灰色实线边框（Web/iOS 用 shadow*，Android 用 elevation）
+    shadowColor: '#0B1F1A',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 2,
   },
   btn: {
     flexDirection: 'row',
@@ -449,7 +487,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     paddingHorizontal: spacing.md,
   },
   fieldInput: {

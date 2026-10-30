@@ -2,12 +2,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { MacroBar, TrendChart, WeekBars } from '@/components/charts';
-import { Button, Card, Screen, SectionTitle, StatTile } from '@/components/ui';
+import { MacroBar, RingProgress, TrendChart, WeekBars } from '@/components/charts';
+import { Button, Card, Screen, SectionTitle, StatTile, workoutIcon } from '@/components/ui';
 import { fontSize, spacing, useTheme } from '@/constants/theme';
 import { useApp } from '@/context/app';
 import { dateLabel, recentDays, shortDate, todayISO, weekdayLabel } from '@/lib/date';
-import { formatDelta, formatKcal, formatKcalCompact, formatWeight, KCAL_UNIT_NOTE } from '@/lib/format';
+import { formatDelta, formatInt, formatKcal, formatKcalCompact, formatWeight, KCAL_UNIT_NOTE } from '@/lib/format';
 import { computeDailySummary, resolveTarget } from '@/lib/nutrition';
 import { GOAL_LABEL, MOOD_LABEL } from '@/lib/types';
 
@@ -76,7 +76,17 @@ export default function HomeScreen() {
 
           {/* 今日总览 */}
           <Card>
-            <View style={styles.tileGrid}>
+            <View style={styles.ringWrap}>
+              <RingProgress
+                value={summary.remaining > 0 ? summary.remaining : 0}
+                max={summary.target + summary.burn}
+                color={summary.remaining >= 0 ? colors.primary : colors.danger}
+                label={formatInt(summary.remaining)}
+                sublabel={summary.remaining >= 0 ? '剩余 · 卡' : '已超出 · 卡'}
+              />
+            </View>
+
+            <View style={styles.tileRow}>
               <View style={styles.tileCell}>
                 <StatTile label="今日摄入" value={formatKcal(summary.intake)} icon="restaurant-outline" color={colors.text} />
               </View>
@@ -85,14 +95,6 @@ export default function HomeScreen() {
               </View>
               <View style={styles.tileCell}>
                 <StatTile label="目标" value={formatKcal(summary.target)} icon="flag-outline" color={colors.textSecondary} />
-              </View>
-              <View style={styles.tileCell}>
-                <StatTile
-                  label="剩余"
-                  value={formatKcal(summary.remaining)}
-                  icon="checkmark-circle-outline"
-                  color={summary.remaining >= 0 ? colors.primary : colors.danger}
-                />
               </View>
             </View>
 
@@ -115,19 +117,21 @@ export default function HomeScreen() {
 
           {/* 快捷操作 */}
           <View style={styles.actions}>
-            <Button
-              title="拍照记一餐"
-              icon="camera-outline"
-              onPress={() => router.push('/food-recognize')}
-            />
-            {todayWorkouts.length === 0 ? (
+            <View style={styles.actionCell}>
+              <Button
+                title="拍照记一餐"
+                icon="camera-outline"
+                onPress={() => router.push('/food-recognize')}
+              />
+            </View>
+            <View style={styles.actionCell}>
               <Button
                 title="去打卡"
                 icon="barbell-outline"
                 variant="secondary"
                 onPress={() => router.push('/workout-edit')}
               />
-            ) : null}
+            </View>
           </View>
 
           {/* 今日训练 */}
@@ -143,7 +147,7 @@ export default function HomeScreen() {
               todayWorkouts.map((w) => (
                 <View key={w.id} style={styles.workoutItem}>
                   <View style={[styles.workoutIcon, { backgroundColor: colors.primarySoft }]}>
-                    <Ionicons name="barbell" size={18} color={colors.primaryDeep} />
+                    <Ionicons name={workoutIcon(w.type)} size={18} color={colors.primaryDeep} />
                   </View>
                   <View style={styles.workoutBody}>
                     <Text style={[styles.workoutType, { color: colors.text }]}>{w.type}</Text>
@@ -218,12 +222,14 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   sampleBannerText: { flex: 1, fontSize: fontSize.xs, lineHeight: 17 },
-  tileGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
-  tileCell: { width: '47%', flexGrow: 1 },
+  ringWrap: { alignItems: 'center', marginBottom: spacing.lg },
+  tileRow: { flexDirection: 'row', gap: spacing.md },
+  tileCell: { flex: 1 },
   macroSection: { marginTop: spacing.lg, gap: spacing.sm },
   macroTitle: { fontSize: fontSize.sm, fontWeight: '600' },
   calcNote: { fontSize: fontSize.xs, lineHeight: 17, marginTop: spacing.md },
-  actions: { gap: spacing.md },
+  actions: { flexDirection: 'row', gap: spacing.md },
+  actionCell: { flex: 1 },
   cardTitle: { marginTop: 0 },
   restRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   restText: { flex: 1, fontSize: fontSize.md, color: '#888' },

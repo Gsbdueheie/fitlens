@@ -73,8 +73,12 @@ export default function FoodScreen() {
 
         {/* 入口 */}
         <View style={styles.actions}>
-          <Button title="拍照识别" icon="camera-outline" onPress={() => router.push('/food-recognize')} />
-          <Button title="手动记录" icon="create-outline" variant="secondary" onPress={() => router.push('/food-review')} />
+          <View style={styles.actionCell}>
+            <Button title="拍照识别" icon="camera-outline" onPress={() => router.push('/food-recognize')} />
+          </View>
+          <View style={styles.actionCell}>
+            <Button title="手动记录" icon="create-outline" variant="secondary" onPress={() => router.push('/food-review')} />
+          </View>
         </View>
 
         {/* 记录列表 */}
@@ -156,7 +160,8 @@ const styles = StyleSheet.create({
   dateCenter: { flex: 1, alignItems: 'center', gap: 2 },
   dateLabel: { fontSize: fontSize.lg, fontWeight: '700' },
   dateSub: { fontSize: fontSize.xs },
-  actions: { gap: spacing.md },
+  actions: { flexDirection: 'row', gap: spacing.md },
+  actionCell: { flex: 1 },
   mealGroup: { gap: spacing.sm },
   mealHeader: { fontSize: fontSize.sm, fontWeight: '700' },
   mealCard: { paddingVertical: spacing.xs },

@@ -11,12 +11,13 @@ import config from './config.js';
 
 const SYSTEM_PROMPT = [
   '你是营养分析助手。请识别这张食物照片，只输出一个 JSON 对象（不要输出任何其他文字，不要用 Markdown 代码块），格式如下：',
-  '{"foods":[{"name":"食物名称（中文）","amount":估算克数(数字)","portion":"份量描述，如 约一碗/约半盘/约一个拳头大小","ingredients":["可辨认的食材"],"confidence":0到1}],"uncertainty":"关于份量与热量不确定性的简短中文说明"}',
+  '{"foods":[{"name":"食物名称（中文）","amount":"估算克数(数字)","portion":"份量描述，如 约一碗/约半盘/约一个拳头大小","ingredients":["可辨认的食材"],"confidence":0到1}],"uncertainty":"关于份量与热量不确定性的简短中文说明"}',
   '要求：',
   '- 用常见参照物（碗/盘/拳头/手掌/筷子）估算份量，amount 给出克数，portion 给出文字描述；',
   '- 份量克数是粗略估算，务必在 uncertainty 提醒用户核对份量；',
   '- 热量无法从照片精确测得，油、酱料、配方、隐藏食材都会影响热量；',
   '- 混合菜、遮挡、模糊或不确定时降低 confidence。',
+  '- 不要输出任何热量或营养数值（卡路里/蛋白质/碳水/脂肪）；营养由服务端按「食物名 + 份量」查表计算，模型只需给出名称与份量。',
 ].join('\n');
 
 export async function recognizeFood({ imageBase64, mimeType }) {

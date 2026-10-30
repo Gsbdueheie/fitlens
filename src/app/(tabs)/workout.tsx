@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { Badge, Button, Card, EmptyState, Screen } from '@/components/ui';
+import { Badge, Button, Card, EmptyState, Screen, workoutIcon } from '@/components/ui';
 import { fontSize, radius, spacing, useTheme } from '@/constants/theme';
 import { useApp } from '@/context/app';
 import { confirmDialog } from '@/lib/confirm';
@@ -56,7 +56,7 @@ export default function WorkoutScreen() {
                 style={({ pressed }) => [styles.row, { opacity: pressed ? 0.6 : 1 }]}
               >
                 <View style={[styles.icon, { backgroundColor: colors.primarySoft }]}>
-                  <Ionicons name="barbell" size={18} color={colors.primaryDeep} />
+                  <Ionicons name={workoutIcon(w.type)} size={18} color={colors.primaryDeep} />
                 </View>
                 <View style={styles.body}>
                   <View style={styles.titleRow}>

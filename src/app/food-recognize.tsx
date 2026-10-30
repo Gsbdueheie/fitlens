@@ -2,13 +2,15 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, Image, Platform, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, StyleSheet, Text, View } from 'react-native';
 
+import { WebCamera } from '@/components/web-camera';
 import { Button, Screen } from '@/components/ui';
 import { fontSize, radius, spacing, useTheme } from '@/constants/theme';
 import { useApp } from '@/context/app';
 import { api, ApiError } from '@/services/api';
 import { setDraft } from '@/services/ai/draft';
+import { isWeb, pickWebImage } from '@/lib/web-media';
 
 export default function FoodRecognizeScreen() {
   const router = useRouter();
@@ -18,29 +20,12 @@ export default function FoodRecognizeScreen() {
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [recognizing, setRecognizing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showCamera, setShowCamera] = useState(false);
 
-  async function pick(kind: 'camera' | 'library') {
-    setError(null);
-    if (kind === 'camera') {
-      const perm = await ImagePicker.requestCameraPermissionsAsync();
-      if (!perm.granted) {
-        setError('需要相机权限才能拍照，请在系统设置中开启，或改为上传图片。');
-        return;
-      }
-    }
-    const res =
-      kind === 'camera'
-        ? await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.7, base64: true })
-        : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.7, base64: true });
-
-    if (res.canceled || !res.assets?.length) return;
-    const asset = res.assets[0];
-    setImageUri(asset.uri);
-    await runRecognition(asset.uri, asset.base64 ?? undefined, asset.mimeType);
-  }
-
-  async function runRecognition(uri: string, base64?: string, mime?: string) {
+  /** 统一入口：预览图片 → 发送后端识别 → 跳转确认页。 */
+  async function startRecognition(uri: string, base64: string, mime: string) {
     if (!session?.token) return;
+    setImageUri(uri);
     setRecognizing(true);
     setError(null);
     try {
@@ -61,9 +46,56 @@ export default function FoodRecognizeScreen() {
     }
   }
 
+  /** 原生：相机 / 相册（expo-image-picker）。 */
+  async function pickNative(kind: 'camera' | 'library') {
+    setError(null);
+    if (kind === 'camera') {
+      const perm = await ImagePicker.requestCameraPermissionsAsync();
+      if (!perm.granted) {
+        setError('需要相机权限才能拍照，请在系统设置中开启，或改为上传图片。');
+        return;
+      }
+    }
+    const res =
+      kind === 'camera'
+        ? await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.7, base64: true })
+        : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.7, base64: true });
+    if (res.canceled || !res.assets?.length) return;
+    const asset = res.assets[0];
+    await startRecognition(asset.uri, asset.base64 ?? '', asset.mimeType ?? 'image/jpeg');
+  }
+
+  /** Web：相册 / 文件选择（隐藏 <input type="file"> + FileReader，带格式与体积校验）。 */
+  async function pickWebLibrary() {
+    setError(null);
+    const r = await pickWebImage();
+    if (!r.ok) {
+      if (r.error) setError(r.error); // 用户取消时 error 为空，不提示
+      return;
+    }
+    await startRecognition(r.image.dataUrl, r.image.base64, r.image.mime);
+  }
+
+  function pickLibrary() {
+    if (isWeb()) void pickWebLibrary();
+    else void pickNative('library');
+  }
+
+  function pickCamera() {
+    if (isWeb()) setShowCamera(true);
+    else void pickNative('camera');
+  }
+
+  function onWebCapture(dataUrl: string, mime: string, base64: string) {
+    setShowCamera(false);
+    void startRecognition(dataUrl, base64, mime);
+  }
+
   return (
     <Screen title="拍照识别" onBack={() => router.back()}>
-      {imageUri ? (
+      {showCamera && isWeb() ? (
+        <WebCamera onCapture={onWebCapture} onCancel={() => setShowCamera(false)} />
+      ) : imageUri ? (
         <View style={styles.previewWrap}>
           <Image source={{ uri: imageUri }} style={styles.preview} resizeMode="cover" />
           {recognizing && (
@@ -90,18 +122,12 @@ export default function FoodRecognizeScreen() {
         </View>
       ) : null}
 
-      <View style={styles.actions}>
-        {Platform.OS !== 'web' ? (
-          <Button title="拍照" icon="camera" onPress={() => pick('camera')} disabled={recognizing} />
-        ) : null}
-        <Button
-          title="从相册选择"
-          icon="images-outline"
-          variant="secondary"
-          onPress={() => pick('library')}
-          disabled={recognizing}
-        />
-      </View>
+      {!showCamera ? (
+        <View style={styles.actions}>
+          <Button title="拍照" icon="camera" onPress={pickCamera} disabled={recognizing} />
+          <Button title="从相册选择" icon="images-outline" variant="secondary" onPress={pickLibrary} disabled={recognizing} />
+        </View>
+      ) : null}
 
       <View style={[styles.note, { backgroundColor: colors.surfaceAlt }]}>
         <Text style={[styles.noteText, { color: colors.textSecondary }]}>

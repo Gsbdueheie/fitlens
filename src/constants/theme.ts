@@ -14,11 +14,12 @@ export const brand = {
   primarySoft: '#E4F6EE',
 } as const;
 
-// 三大营养素分类色（固定顺序：蛋白质 / 碳水 / 脂肪）
+// 三大营养素分类色（固定顺序：蛋白质 / 碳水 / 脂肪）。
+// 采用降低饱和度的柔和色，避免在数据图表中过于刺眼。
 export const macros = {
-  protein: '#2E6FDB', // 蓝
-  carbs: '#E08A00', // 琥珀
-  fat: '#C2417C', // 玫红
+  protein: '#4A7FC0', // 柔和的蓝
+  carbs: '#C99A3D', // 柔和的琥珀
+  fat: '#B7688B', // 柔和的玫红
 } as const;
 
 export const statusColors = {
@@ -34,7 +35,7 @@ export const energy = {
 } as const;
 
 export const lightColors = {
-  background: '#F5F7F6',
+  background: '#F7F8FA',
   surface: '#FFFFFF',
   surfaceAlt: '#EDF0EE',
   border: '#E3E7E4',

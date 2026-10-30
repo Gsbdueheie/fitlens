@@ -14,15 +14,22 @@ const table = JSON.parse(
   fs.readFileSync(path.join(__dirname, '..', 'data', 'foods.json'), 'utf8'),
 );
 
-/** 名称匹配：先精确，再最长子串包含。返回 null 表示未查到。 */
+/** 名称匹配：先规范化、再精确、最后最长子串包含。返回 null 表示未查到。 */
 export function lookupFood(name) {
-  const n = String(name || '').trim().toLowerCase();
+  const raw = String(name || '').trim().toLowerCase();
+  if (!raw) return null;
+  // 去掉括号说明与常见量词/修饰词，提高命中率（如「一碗米饭」→「米饭」）
+  const n = raw
+    .replace(/[（(].*?[)）]/g, '')
+    .replace(/(约|大约|一小份|一份|半份|小份|中份|大份|一掌心|一个|一碗|一盘|半碗|半个|一整)/g, '')
+    .replace(/\s+/g, '');
   if (!n) return null;
   let best = null;
   for (const f of table) {
-    if (f.name === n) return f;
-    if (n.includes(f.name) || f.name.includes(n)) {
-      if (!best || f.name.length > best.name.length) best = f;
+    const fn = f.name.toLowerCase();
+    if (fn === n) return f;
+    if (n.includes(fn) || fn.includes(n)) {
+      if (!best || fn.length > best.name.length) best = f;
     }
   }
   return best;

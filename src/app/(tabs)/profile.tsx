@@ -191,7 +191,7 @@ export default function ProfileScreen() {
             />
             <Button
               title="退出登录"
-              variant="danger"
+              variant="dangerGhost"
               icon="log-out-outline"
               onPress={() => confirmDialog('退出登录', '确定退出当前账号吗？', () => logout())}
             />

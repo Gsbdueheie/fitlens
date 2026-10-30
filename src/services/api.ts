@@ -1,13 +1,11 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-
 /**
  * 后端 API 客户端。
  * 后端地址通过 EXPO_PUBLIC_API_URL 配置（这是公开的服务地址，不是密钥）。
  * 密钥（DEEPSEEK_API_KEY 等）只存在于后端，前端绝不接触。
+ * 会话 token 由 AppProvider 统一从本地 session 读取并显式传入，不在此处单独存储。
  */
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:4000';
-const TOKEN_KEY = 'fitlens.authToken';
 
 export class ApiError extends Error {
   status: number;
@@ -16,15 +14,6 @@ export class ApiError extends Error {
     this.name = 'ApiError';
     this.status = status;
   }
-}
-
-export async function getToken(): Promise<string | null> {
-  return AsyncStorage.getItem(TOKEN_KEY);
-}
-
-export async function setToken(token: string | null): Promise<void> {
-  if (token) await AsyncStorage.setItem(TOKEN_KEY, token);
-  else await AsyncStorage.removeItem(TOKEN_KEY);
 }
 
 interface ReqOptions {
