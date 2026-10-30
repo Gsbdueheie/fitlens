@@ -364,32 +364,55 @@ async function recognizeFood(env, imageBase64, mimeType) {
   return parsed;
 }
 
-/** 提取首个平衡的 {...}，兼容 Markdown 围栏与前后解释文字。 */
+/**
+ * 提取模型输出中的 JSON 对象，兼容 Markdown 围栏、前后解释文字与思考内容。
+ * 策略：扫描所有平衡的 {...} 候选，优先返回「可 JSON.parse 且含 foods」的那个，
+ * 否则返回第一个可解析的对象（避免前面夹带的带花括号文字导致解析失败）。
+ */
 function extractJsonObject(text) {
   let t = String(text || '').trim();
   const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/i);
   if (fence) t = fence[1].trim();
-  const start = t.indexOf('{');
-  if (start < 0) return null;
-  let depth = 0;
-  let inStr = false;
-  let esc = false;
-  for (let i = start; i < t.length; i++) {
-    const c = t[i];
-    if (inStr) {
-      if (esc) esc = false;
-      else if (c === '\\') esc = true;
-      else if (c === '"') inStr = false;
-      continue;
+
+  const candidates = [];
+  for (let i = 0; i < t.length; i++) {
+    if (t[i] !== '{') continue;
+    let depth = 0;
+    let inStr = false;
+    let esc = false;
+    let end = -1;
+    for (let j = i; j < t.length; j++) {
+      const c = t[j];
+      if (inStr) {
+        if (esc) esc = false;
+        else if (c === '\\') esc = true;
+        else if (c === '"') inStr = false;
+        continue;
+      }
+      if (c === '"') inStr = true;
+      else if (c === '{') depth++;
+      else if (c === '}') {
+        depth--;
+        if (depth === 0) {
+          end = j;
+          break;
+        }
+      }
     }
-    if (c === '"') inStr = true;
-    else if (c === '{') depth++;
-    else if (c === '}') {
-      depth--;
-      if (depth === 0) return t.slice(start, i + 1);
+    if (end >= 0) candidates.push(t.slice(i, end + 1));
+  }
+
+  let firstValid = null;
+  for (const c of candidates) {
+    try {
+      JSON.parse(c);
+      if (firstValid == null) firstValid = c;
+      if (/["']foods["']\s*:/.test(c)) return c;
+    } catch {
+      // 跳过非法 JSON，继续找下一个候选
     }
   }
-  return null;
+  return firstValid;
 }
 
 /** 去掉「带壳/不带壳/去皮/去壳」等外观备注，避免污染名称与数据库匹配。 */
