@@ -1,7 +1,7 @@
 /**
  * FitLens 数据模型。
  * 单位约定：所有热量字段一律以 kcal（千卡）存储与计算，
- * 界面显示时标注为「卡」（1 卡 = 1 kcal），见 format.ts 的 KCAL_UNIT_NOTE。
+ * 界面显示时标注为「千卡」，见 format.ts 的 KCAL_UNIT_NOTE。
  */
 
 export type Goal = 'lose' | 'gain' | 'maintain';

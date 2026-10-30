@@ -272,7 +272,7 @@ export default function FoodReviewScreen() {
         {estimateMsg ? (
           <Text style={[styles.estimateMsg, { color: colors.textSecondary }]}>{estimateMsg}</Text>
         ) : null}
-        <Field label="热量" value={calories} onChangeText={setCalories} placeholder="kcal" keyboardType="decimal-pad" suffix="卡" error={calError} />
+        <Field label="热量" value={calories} onChangeText={setCalories} placeholder="kcal" keyboardType="decimal-pad" suffix="千卡" error={calError} />
         <View style={styles.macroRow}>
           <View style={styles.macroCol}>
             <Field label="蛋白质" value={protein} onChangeText={setProtein} keyboardType="decimal-pad" suffix="g" />

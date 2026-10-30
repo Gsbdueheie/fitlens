@@ -19,7 +19,7 @@ export const GOAL_DEFAULT_TARGET: Record<Goal, number> = {
 };
 
 export const GOAL_TARGET_NOTE =
-  '目标摄入为按健身目标给出的粗略基线（减脂 1800 / 维持 2100 / 增肌 2600 卡），' +
+  '目标摄入为按健身目标给出的粗略基线（减脂 1800 / 维持 2100 / 增肌 2600 千卡），' +
   '可在「我的」中修改为自定义值，非个体化营养处方。';
 
 export function resolveTarget(goal: Goal, targetKcal: number | null): number {

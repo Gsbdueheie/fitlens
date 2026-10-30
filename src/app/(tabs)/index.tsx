@@ -82,7 +82,7 @@ export default function HomeScreen() {
                 max={summary.target + summary.burn}
                 color={summary.remaining >= 0 ? colors.primary : colors.danger}
                 label={formatInt(summary.remaining)}
-                sublabel={summary.remaining >= 0 ? '剩余 · 卡' : '已超出 · 卡'}
+                sublabel={summary.remaining >= 0 ? '剩余 · 千卡' : '已超出 · 千卡'}
               />
             </View>
 

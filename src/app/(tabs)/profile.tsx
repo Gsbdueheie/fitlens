@@ -114,7 +114,7 @@ export default function ProfileScreen() {
               value={target}
               onChangeText={(t) => setTarget(t.replace(/[^\d]/g, ''))}
               keyboardType="number-pad"
-              suffix="卡"
+              suffix="千卡"
             />
             <Field
               label="身高（选填）"

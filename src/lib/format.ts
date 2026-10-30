@@ -2,21 +2,19 @@ import { round } from './util';
 
 /**
  * 单位约定（重要）：
- * 本应用中的「1 卡」按营养学中的「1 千卡（kcal）」计算，
- * 符合日常饮食记录里的口语习惯。程序内部统一用 kcal 存储与计算，
- * 仅在界面显示时把数值标注为「卡」。
+ * 程序内部统一用 kcal（千卡）存储与计算，界面显示时标注为「千卡」。
  */
 export const KCAL_UNIT_NOTE =
-  '本应用中的 1 卡按 1 千卡（kcal）计算，符合日常饮食记录中的用法。';
+  '本应用的热量单位统一为千卡（kcal）。';
 
-/** 千卡 → 「1,800 卡」 */
+/** 千卡 → 「1,800 千卡」 */
 export function formatKcal(n: number): string {
-  return `${Math.round(n).toLocaleString('zh-CN')} 卡`;
+  return `${Math.round(n).toLocaleString('zh-CN')} 千卡`;
 }
 
-/** 紧凑形式：「1800卡」（用于图表/标签） */
+/** 紧凑形式：「1800千卡」（用于图表/标签） */
 export function formatKcalCompact(n: number): string {
-  return `${Math.round(n).toLocaleString('zh-CN')}卡`;
+  return `${Math.round(n).toLocaleString('zh-CN')}千卡`;
 }
 
 export function formatInt(n: number): string {

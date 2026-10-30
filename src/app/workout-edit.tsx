@@ -107,7 +107,7 @@ export default function WorkoutEditScreen() {
           onChangeText={(t) => setCalories(t.replace(/[^\d.]/g, ''))}
           placeholder="例如 300"
           keyboardType="decimal-pad"
-          suffix="卡"
+          suffix="千卡"
           error={errors.calories}
         />
 
