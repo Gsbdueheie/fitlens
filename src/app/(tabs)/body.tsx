@@ -30,13 +30,22 @@ function latestPair(arr: BodyMeasurement[], key: MetricKey) {
 export default function BodyScreen() {
   const router = useRouter();
   const { colors } = useTheme();
-  const { measurements, deleteMeasurement } = useApp();
+  const { profile, measurements, deleteMeasurement } = useApp();
 
   const [active, setActive] = useState<MetricKey>('weightKg');
 
   const sorted = [...measurements].sort(
     (a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt),
   );
+
+  // 体重历史测量（升序），仅用于「趋势/历史」展示，不伪造记录。
+  const weightMeasurements = measurements
+    .filter((m) => m.weightKg != null)
+    .sort((a, b) => a.date.localeCompare(b.date));
+  const latestWeightMeasurement = weightMeasurements[weightMeasurements.length - 1] ?? null;
+
+  // 当前体重：优先个人资料（服务端 profile.weightKg），其次最新测量。
+  const currentWeight = profile?.weightKg ?? latestWeightMeasurement?.weightKg ?? null;
 
   const activeMetric = METRICS.find((m) => m.key === active)!;
   const trendData = measurements
@@ -58,7 +67,7 @@ export default function BodyScreen() {
         <Button title="记录测量" icon="add" onPress={() => router.push('/body-edit')} />
 
         {/* 最近一次 + 变化 */}
-        {sorted.length === 0 ? (
+        {sorted.length === 0 && currentWeight == null ? (
           <Card>
             <EmptyState
               icon="body-outline"
@@ -72,16 +81,38 @@ export default function BodyScreen() {
           <>
             <View style={styles.tileRow}>
               {METRICS.map((m) => {
+                const isWeight = m.key === 'weightKg';
                 const { last, prev } = latestPair(measurements, m.key);
                 const delta = last != null && prev != null ? last - prev : null;
                 const color = m.key === 'weightKg' ? colors.primary : m.key === 'waistCm' ? colors.warning : colors.protein;
+
+                let value = '—';
+                let sub = '暂无数据';
+                let has = false;
+                if (isWeight) {
+                  // 体重「当前值」优先用个人资料体重（服务端），其次最新测量。
+                  has = currentWeight != null;
+                  value = currentWeight != null ? formatWeight(currentWeight) : '—';
+                  sub = currentWeight == null
+                    ? '暂无数据'
+                    : profile?.weightKg != null
+                      ? '来自个人资料'
+                      : delta != null
+                        ? `${formatDelta(delta)} kg`
+                        : '暂无变化';
+                } else {
+                  has = last != null;
+                  value = last != null ? formatLength(last) : '—';
+                  sub = delta != null ? `${formatDelta(delta)} ${m.unit}` : '暂无变化';
+                }
+
                 return (
                   <View key={m.key} style={styles.tileCell}>
                     <StatTile
                       label={m.label}
-                      value={last != null ? (m.key === 'weightKg' ? formatWeight(last) : formatLength(last)) : '—'}
-                      sub={delta != null ? `${formatDelta(delta)} ${m.unit}` : '暂无变化'}
-                      color={last != null ? color : colors.textMuted}
+                      value={value}
+                      sub={sub}
+                      color={has ? color : colors.textMuted}
                       icon={m.icon}
                     />
                   </View>
@@ -107,6 +138,18 @@ export default function BodyScreen() {
             </Card>
 
             {/* 历史记录 */}
+            {sorted.length === 0 ? (
+              <Card>
+                <SectionTitle title="历史记录" style={styles.cardTitle} />
+                <EmptyState
+                  icon="body-outline"
+                  title="还没有测量记录"
+                  description="个人资料中的体重已作为当前体重展示；记录测量后可查看历史趋势"
+                  actionLabel="记录测量"
+                  onAction={() => router.push('/body-edit')}
+                />
+              </Card>
+            ) : (
             <Card>
               <SectionTitle title="历史记录" style={styles.cardTitle} />
               {sorted.map((m, i) => (
@@ -148,9 +191,10 @@ export default function BodyScreen() {
                 </View>
               ))}
             </Card>
+            )}
 
             <Text style={[styles.disclaimer, { color: colors.textMuted }]}>
-              趋势数据仅供日常记录参考，不构成医疗诊断或减重建议。
+              当前体重来自个人资料（服务端）；历史趋势来自测量记录。趋势数据仅供日常记录参考，不构成医疗诊断或减重建议。
             </Text>
           </>
         )}

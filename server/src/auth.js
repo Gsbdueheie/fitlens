@@ -33,7 +33,8 @@ export async function register({ email, password, nickname }) {
   await addUser(user);
 
   const token = await createSession(user.id);
-  return { token, user: publicUser(user) };
+  // 返回内部 user（含 passwordHash）；由 app.js 用 withAvatar() 序列化，绝不直接序列化返回。
+  return { token, user };
 }
 
 export async function login({ email, password }) {
@@ -44,7 +45,8 @@ export async function login({ email, password }) {
   if (!ok) return { error: '邮箱或密码错误' };
 
   const token = await createSession(user.id);
-  return { token, user: publicUser(user) };
+  // 返回内部 user（含 passwordHash）；由 app.js 用 withAvatar() 序列化，绝不直接序列化返回。
+  return { token, user };
 }
 
 export async function logout(token) {
@@ -82,7 +84,8 @@ export function publicUser(u) {
     id: u.id,
     email: u.email,
     nickname: u.nickname,
-    avatarUrl: u.avatarUrl ?? null, // 由 app.js 注入数据 URL
+    avatarUrl: u.avatarUrl ?? null, // 由 app.js 用 withAvatar() 注入数据 URL
+    avatarVersion: u.avatarVersion ?? null, // 头像版本（用于版本化文件名 / 缓存失效）
     goal: u.goal ?? 'lose',
     targetKcal: u.targetKcal ?? null,
     heightCm: u.heightCm ?? null,

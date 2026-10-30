@@ -9,6 +9,7 @@ import { useApp } from '@/context/app';
 import { addDays, dateLabel, todayISO } from '@/lib/date';
 import type { BodyMeasurement } from '@/lib/types';
 import { nowISO, round, uid } from '@/lib/util';
+import { ApiError } from '@/services/api';
 
 export default function BodyEditScreen() {
   const router = useRouter();
@@ -25,8 +26,9 @@ export default function BodyEditScreen() {
   const [hip, setHip] = useState(existing?.hipCm != null ? String(existing.hipCm) : '');
   const [note, setNote] = useState(existing?.note ?? '');
   const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
-  function save() {
+  async function save() {
     const w = weight.trim() === '' ? null : parseFloat(weight);
     const wa = waist.trim() === '' ? null : parseFloat(waist);
     const h = hip.trim() === '' ? null : parseFloat(hip);
@@ -56,8 +58,19 @@ export default function BodyEditScreen() {
       createdAt: existing?.createdAt ?? nowISO(),
       updatedAt: nowISO(),
     };
-    void saveMeasurement(record);
-    router.back();
+
+    setSaving(true);
+    setError(null);
+    try {
+      await saveMeasurement(record);
+      router.back();
+    } catch (e) {
+      // 本地测量已保存；同步体重到个人资料失败时明确提示，不静默退回示例值。
+      const detail = e instanceof ApiError ? e.message : '请检查网络后重试';
+      setError(`测量已保存到本机，但同步体重到个人资料失败：${detail}`);
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -98,7 +111,7 @@ export default function BodyEditScreen() {
         {error ? <Text style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}
 
         <View style={styles.actions}>
-          <Button title="保存" icon="checkmark" onPress={save} />
+          <Button title="保存" icon="checkmark" loading={saving} onPress={save} />
           <Button title="取消" variant="ghost" onPress={() => router.back()} />
         </View>
       </View>

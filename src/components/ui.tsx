@@ -229,6 +229,7 @@ export function Field({
   keyboardType = 'default',
   error,
   suffix,
+  right,
   multiline = false,
   maxLength,
   secureTextEntry = false,
@@ -241,6 +242,7 @@ export function Field({
   keyboardType?: 'default' | 'number-pad' | 'phone-pad' | 'decimal-pad' | 'numeric' | 'email-address';
   error?: string | null;
   suffix?: string;
+  right?: React.ReactNode;
   multiline?: boolean;
   maxLength?: number;
   secureTextEntry?: boolean;
@@ -287,6 +289,7 @@ export function Field({
         {suffix ? (
           <Text style={[styles.fieldSuffix, { color: colors.textMuted }]}>{suffix}</Text>
         ) : null}
+        {right}
       </View>
       {error ? (
         <Text style={[styles.fieldError, { color: colors.danger }]}>{error}</Text>

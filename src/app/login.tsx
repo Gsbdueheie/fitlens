@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
 import { Button, Card, Field, Screen } from '@/components/ui';
 import { radius, spacing, useTheme, fontSize } from '@/constants/theme';
@@ -16,6 +16,22 @@ const PASSWORD_RULES: { key: string; label: string; test: (p: string) => boolean
   { key: 'letter', label: '至少一个字母', test: (p) => /[A-Za-z]/.test(p) },
   { key: 'digit', label: '至少一个数字', test: (p) => /\d/.test(p) },
 ];
+
+/** 密码明文/密文切换按钮（挂在 Field 的 right 插槽）。 */
+function EyeToggle({ show, onPress, label }: { show: boolean; onPress: () => void; label: string }) {
+  const { colors } = useTheme();
+  return (
+    <Pressable
+      onPress={onPress}
+      hitSlop={8}
+      accessibilityRole="button"
+      accessibilityLabel={show ? `隐藏${label}` : `显示${label}`}
+      style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
+    >
+      <Ionicons name={show ? 'eye-off-outline' : 'eye-outline'} size={18} color={colors.textMuted} />
+    </Pressable>
+  );
+}
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -32,6 +48,11 @@ export default function LoginScreen() {
   const [captchaInput, setCaptchaInput] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+
+  const { width } = useWindowDimensions();
+  const isWide = width >= 560; // 桌面并排，窄屏（手机）上下排列
 
   const passwordRules = PASSWORD_RULES.map((r) => ({ ...r, ok: r.test(password) }));
 
@@ -141,7 +162,46 @@ export default function LoginScreen() {
           keyboardType="email-address"
           autoCapitalize="none"
         />
-        <Field label="密码" value={password} onChangeText={setPassword} placeholder="至少 8 位，含字母和数字" secureTextEntry />
+
+        {mode === 'register' ? (
+          <Field label="昵称" value={nickname} onChangeText={setNickname} placeholder="你的昵称" maxLength={20} />
+        ) : null}
+
+        {/* 密码与确认密码相邻：桌面并排、窄屏上下，中间不插入其它字段 */}
+        {mode === 'register' ? (
+          <View style={[styles.pwRow, !isWide && styles.pwCol]}>
+            <View style={styles.pwCell}>
+              <Field
+                label="密码"
+                value={password}
+                onChangeText={setPassword}
+                placeholder="至少 8 位，含字母和数字"
+                secureTextEntry={!showPassword}
+                right={<EyeToggle show={showPassword} onPress={() => setShowPassword((v) => !v)} label="密码" />}
+              />
+            </View>
+            <View style={styles.pwCell}>
+              <Field
+                label="确认密码"
+                value={confirm}
+                onChangeText={setConfirm}
+                placeholder="再次输入密码"
+                secureTextEntry={!showConfirm}
+                right={<EyeToggle show={showConfirm} onPress={() => setShowConfirm((v) => !v)} label="确认密码" />}
+              />
+            </View>
+          </View>
+        ) : (
+          <Field
+            label="密码"
+            value={password}
+            onChangeText={setPassword}
+            placeholder="至少 8 位，含字母和数字"
+            secureTextEntry={!showPassword}
+            right={<EyeToggle show={showPassword} onPress={() => setShowPassword((v) => !v)} label="密码" />}
+          />
+        )}
+
         {mode === 'register' ? (
           <View style={styles.rules}>
             {passwordRules.map((r) => (
@@ -159,11 +219,8 @@ export default function LoginScreen() {
           </View>
         ) : null}
 
-        {mode === 'register' ? (
-          <>
-            <Field label="昵称" value={nickname} onChangeText={setNickname} placeholder="你的昵称" maxLength={20} />
-            <Field label="确认密码" value={confirm} onChangeText={setConfirm} placeholder="再次输入密码" secureTextEntry />
-          </>
+        {mode === 'register' && confirm.length > 0 && password !== confirm ? (
+          <Text style={[styles.pwMismatch, { color: colors.warning }]}>两次输入的密码不一致</Text>
         ) : null}
 
         {/* 图形验证码 */}
@@ -215,6 +272,10 @@ const styles = StyleSheet.create({
   modeBtn: { flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: radius.md },
   modeText: { fontSize: fontSize.sm, fontWeight: '600' },
   label: { fontSize: fontSize.sm, fontWeight: '600' },
+  pwRow: { flexDirection: 'row', gap: spacing.md },
+  pwCol: { flexDirection: 'column' },
+  pwCell: { flex: 1 },
+  pwMismatch: { fontSize: fontSize.xs, marginTop: -spacing.xs, marginBottom: spacing.sm },
   rules: { gap: 2, marginTop: -spacing.xs, marginBottom: spacing.sm },
   ruleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   ruleText: { fontSize: fontSize.xs },

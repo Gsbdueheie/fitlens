@@ -28,6 +28,8 @@ export default function ProfileScreen() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [avatarSaving, setAvatarSaving] = useState(false);
+  const [avatarSaved, setAvatarSaved] = useState(false);
 
   async function pickAvatar() {
     setError(null);
@@ -44,11 +46,17 @@ export default function ProfileScreen() {
       setError('无法读取头像图片，请重试');
       return;
     }
+    setAvatarSaving(true);
     try {
+      // updateAvatar 会用服务端返回的最新 user（含新 avatarUrl）更新 session → 界面即时刷新
       await updateAvatar(asset.base64, asset.mimeType ?? 'image/jpeg');
+      setAvatarSaved(true);
+      setTimeout(() => setAvatarSaved(false), 1500);
     } catch (e) {
-      // 失败时原头像仍保留（未更新 session），仅提示错误
+      // 失败时原头像仍保留（未更新 session），仅提示错误，不清空、不误显示「已更新」
       setError(e instanceof ApiError ? e.message : '头像上传失败，原头像已保留');
+    } finally {
+      setAvatarSaving(false);
     }
   }
 
@@ -85,22 +93,33 @@ export default function ProfileScreen() {
         {/* 头像 + 账号 */}
         <Card>
           <View style={styles.avatarRow}>
-            <Pressable onPress={pickAvatar} accessibilityRole="button" accessibilityLabel="更换头像">
+            <Pressable
+              onPress={pickAvatar}
+              disabled={avatarSaving}
+              accessibilityRole="button"
+              accessibilityLabel="更换头像"
+              style={({ pressed }) => ({ opacity: avatarSaving ? 0.6 : pressed ? 0.8 : 1 })}
+            >
               {profile?.avatarUrl ? (
-                <Image source={{ uri: profile.avatarUrl }} style={styles.avatar} />
+                <Image
+                  key={profile.avatarUrl}
+                  source={{ uri: profile.avatarUrl }}
+                  style={styles.avatar}
+                />
               ) : (
                 <View style={[styles.avatar, styles.avatarPlaceholder, { backgroundColor: colors.primarySoft }]}>
                   <Ionicons name="person" size={32} color={colors.primaryDeep} />
                 </View>
               )}
               <View style={[styles.cameraBadge, { backgroundColor: colors.primary }]}>
-                <Ionicons name="camera" size={12} color="#fff" />
+                <Ionicons name={avatarSaving ? 'hourglass-outline' : 'camera'} size={12} color="#fff" />
               </View>
             </Pressable>
             <View style={styles.avatarInfo}>
               <Text style={[styles.email, { color: colors.textSecondary }]}>{profile?.email ?? ''}</Text>
               <View style={styles.badgeRow}>
                 <Badge label="已登录" color={colors.success} icon="shield-checkmark-outline" />
+                {avatarSaved ? <Badge label="头像已更新" color={colors.success} /> : null}
               </View>
             </View>
           </View>

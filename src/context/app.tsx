@@ -207,12 +207,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
 
     async function saveMeasurement(record: BodyMeasurement) {
-      setMeasurements((prev) => {
-        const idx = prev.findIndex((x) => x.id === record.id);
-        const next = idx >= 0 ? prev.map((x, i) => (i === idx ? record : x)) : [record, ...prev];
-        saveJSON(STORAGE_KEYS.measurements, next);
-        return next;
-      });
+      const idx = measurements.findIndex((x) => x.id === record.id);
+      const next = idx >= 0 ? measurements.map((x, i) => (i === idx ? record : x)) : [record, ...measurements];
+      setMeasurements(next);
+      await saveJSON(STORAGE_KEYS.measurements, next);
+      // 一致性规则：最新一条带体重的测量 = 用户「当前体重」，同步写入个人资料（服务端），避免两处长期不一致。
+      await syncProfileWeight(next);
+    }
+
+    /**
+     * 把「最新一条体重测量」同步到个人资料（服务端 profile.weightKg）。
+     * 规则：仅当最新测量的体重与当前资料体重不同时才写；写失败会抛错，由调用方提示用户。
+     */
+    async function syncProfileWeight(next: BodyMeasurement[]) {
+      const token = session?.token;
+      if (!token) return;
+      const latest = next
+        .filter((m) => m.weightKg != null)
+        .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt))[0];
+      if (!latest) return;
+      const current = profile?.weightKg ?? null;
+      if (latest.weightKg !== current) {
+        const res = await api.updateMe(token, { weightKg: latest.weightKg });
+        setSession((prev) => (prev ? { ...prev, user: res.user } : prev));
+        await saveJSON(STORAGE_KEYS.session, { token, user: res.user });
+      }
     }
 
     async function deleteMeasurement(id: string) {

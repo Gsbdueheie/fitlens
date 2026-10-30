@@ -41,7 +41,8 @@ function numInRange(v, min, max) {
   if (v === null || v === undefined || v === '') return { ok: true, value: null };
   const n = Number(v);
   if (!Number.isFinite(n)) return { ok: false, value: null };
-  return { ok: n >= min && n <= max, value: Math.round(n) };
+  // 保留 1 位小数（体重等字段），与身体测量记录 round(,1) 的口径一致；整数项仍保持整数。
+  return { ok: n >= min && n <= max, value: Math.round(n * 10) / 10 };
 }
 
 /** 校验并规范化资料字段，返回 { patch } 或 { error }。 */
@@ -84,9 +85,12 @@ function validateAvatar(base64, mime) {
 }
 
 function avatarUrlFor(user) {
-  if (!user.avatarExt || !user.avatarMime) return null;
+  // 优先使用版本化文件名 avatarFile（每次上传都是唯一文件名，天然避免旧缓存命中）；
+  // 兼容旧数据：没有 avatarFile 时回退到 <id>.<ext>。
+  const file = user.avatarFile || (user.avatarExt && `${user.id}.${user.avatarExt}`);
+  if (!file || !user.avatarMime) return null;
   try {
-    const buf = fs.readFileSync(path.join(uploadsDir, `${user.id}.${user.avatarExt}`));
+    const buf = fs.readFileSync(path.join(uploadsDir, file));
     return `data:${user.avatarMime};base64,${buf.toString('base64')}`;
   } catch {
     return null;
@@ -206,7 +210,8 @@ app.post('/api/auth/register', async (req, res) => {
     nickname,
   });
   if (result.error) return res.status(409).json({ error: result.error });
-  res.json(result);
+  // 注册即返回带最新头像的用户（含 avatarUrl / avatarVersion）
+  res.json({ token: result.token, user: withAvatar(result.user) });
 });
 
 app.post('/api/auth/login', async (req, res) => {
@@ -232,7 +237,8 @@ app.post('/api/auth/login', async (req, res) => {
     password,
   });
   if (result.error) return res.status(401).json({ error: result.error });
-  res.json(result);
+  // 登录即返回带最新头像的用户（含 avatarUrl / avatarVersion）
+  res.json({ token: result.token, user: withAvatar(result.user) });
 });
 
 app.post('/api/auth/logout', requireAuth, async (req, res) => {
@@ -262,15 +268,37 @@ app.post('/api/avatar', requireAuth, async (req, res) => {
   const av = validateAvatar(imageBase64, mimeType);
   if (av.error) return res.status(400).json({ error: av.error });
 
+  // 绑定当前认证用户，绝不信任客户端传入的 userId。
+  const userId = req.auth.user.id;
+  // 版本化文件名：每次上传都是唯一文件，避免旧缓存命中，也让「清理旧文件」有明确目标。
+  const version = Date.now();
+  const filename = `${userId}-${version}.${av.ext}`;
+  const oldFile = req.auth.user.avatarFile || null;
+
   try {
     fs.mkdirSync(uploadsDir, { recursive: true });
-    fs.writeFileSync(path.join(uploadsDir, `${req.auth.user.id}.${av.ext}`), Buffer.from(imageBase64, 'base64'));
+    fs.writeFileSync(path.join(uploadsDir, filename), Buffer.from(imageBase64, 'base64'));
   } catch {
     return res.status(500).json({ error: '头像保存失败，请稍后重试' });
   }
 
-  const patch = { avatarExt: av.ext, avatarMime: av.mime, updatedAt: new Date().toISOString() };
-  await updateUser(req.auth.user.id, patch);
+  const patch = {
+    avatarFile: filename,
+    avatarMime: av.mime,
+    avatarVersion: version,
+    updatedAt: new Date().toISOString(),
+  };
+  await updateUser(userId, patch);
+
+  // 数据库已成功切换到新头像后，再清理旧文件（best-effort，失败不影响新头像使用）。
+  if (oldFile && oldFile !== filename) {
+    try {
+      fs.unlinkSync(path.join(uploadsDir, oldFile));
+    } catch {
+      // 忽略：旧文件清理失败不影响新头像
+    }
+  }
+
   res.json({ user: withAvatar({ ...req.auth.user, ...patch }) });
 });
 

@@ -578,7 +578,8 @@ function numInRange(v, min, max) {
   if (v === null || v === undefined || v === '') return { ok: true, value: null };
   const n = Number(v);
   if (!Number.isFinite(n)) return { ok: false, value: null };
-  return { ok: n >= min && n <= max, value: Math.round(n) };
+  // 保留 1 位小数（体重等字段），与身体测量记录 round(,1) 的口径一致；整数项仍保持整数。
+  return { ok: n >= min && n <= max, value: Math.round(n * 10) / 10 };
 }
 
 function sanitizeProfile(body) {
@@ -624,7 +625,8 @@ function publicUser(user) {
     id: user.id,
     email: user.email,
     nickname: user.nickname,
-    avatarUrl: null,
+    avatarUrl: null, // 由 publicUserWithAvatar() 注入数据 URL
+    avatarVersion: user.avatarVersion ?? null, // 头像版本（用于版本化 KV key / 缓存失效）
     goal: user.goal ?? 'lose',
     targetKcal: user.targetKcal ?? null,
     heightCm: user.heightCm ?? null,
@@ -638,7 +640,13 @@ function publicUser(user) {
 
 async function publicUserWithAvatar(env, user) {
   const pu = publicUser(user);
-  pu.avatarUrl = (await env.FITLENS_KV.get(`avatar:${user.id}`)) || null;
+  // 版本化 key：每次上传写 `avatar:<id>:<version>`，读时精确指向最新版本，避免 KV 最终一致读到旧值。
+  if (user.avatarVersion != null) {
+    pu.avatarUrl = (await env.FITLENS_KV.get(`avatar:${user.id}:${user.avatarVersion}`)) || null;
+  } else {
+    // 兼容历史未版本化数据
+    pu.avatarUrl = (await env.FITLENS_KV.get(`avatar:${user.id}`)) || null;
+  }
   return pu;
 }
 
@@ -773,14 +781,32 @@ const ROUTES = {
     const av = validateAvatar(b.imageBase64, b.mimeType);
     if (av.error) return json({ error: av.error }, 400, h);
 
-    const dataUrl = `data:${av.mime};base64,${b.imageBase64}`;
-    await env.FITLENS_KV.put(`avatar:${a.session.userId}`, dataUrl);
-
+    // 绑定当前认证用户：从 session.email 取用户，绝不信任客户端传入的 userId。
     const user = await getUser(env, a.session.email);
     if (!user) return json({ error: '未登录或会话已过期' }, 401, h);
+
+    const version = Date.now();
+    const dataUrl = `data:${av.mime};base64,${b.imageBase64}`;
+    const oldVersion = user.avatarVersion ?? null;
+
+    // 1) 先写新版本 key（新 key，不会覆盖旧值，也避免 KV 最终一致读到第一次的旧头像）。
+    await env.FITLENS_KV.put(`avatar:${user.id}:${version}`, dataUrl);
+    // 2) 再更新用户记录指向新版本。
+    user.avatarVersion = version;
     user.updatedAt = new Date().toISOString();
     await putUser(env, user);
-    return json({ user: await publicUserWithAvatar(env, user) }, 200, h);
+
+    // 3) 数据库已切换到新头像后，再清理旧 key（best-effort，失败不影响新头像）。
+    if (oldVersion != null && oldVersion !== version) {
+      try {
+        await env.FITLENS_KV.delete(`avatar:${user.id}:${oldVersion}`);
+      } catch {
+        // 忽略：旧 key 清理失败不影响新头像
+      }
+    }
+
+    // 直接使用内存中的 dataUrl 构造返回，绝不回读 KV（规避最终一致读旧值）。
+    return json({ user: { ...publicUser(user), avatarUrl: dataUrl } }, 200, h);
   },
 
   'POST /api/recognize': async (req, env, h) => {

@@ -51,6 +51,7 @@ export interface ServerUser {
   email: string;
   nickname: string;
   avatarUrl: string | null;
+  avatarVersion: number | null; // 头像版本（服务端版本化存储的版本号，随头像变化）
   goal: 'lose' | 'gain' | 'maintain';
   targetKcal: number | null;
   heightCm: number | null;
