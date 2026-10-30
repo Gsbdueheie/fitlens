@@ -17,7 +17,7 @@ export class ApiError extends Error {
 }
 
 interface ReqOptions {
-  method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: unknown;
   token?: string | null;
 }
@@ -98,4 +98,9 @@ export const api = {
 
   chat: (token: string, messages: import('@/lib/types').ChatMessage[]) =>
     request<{ reply: string }>('/api/chat', { method: 'POST', token, body: { messages } }),
+
+  records: (token: string) =>
+    request<{ records: import('@/lib/types').UserRecords }>('/api/records', { token }),
+  putRecords: (token: string, records: import('@/lib/types').UserRecords) =>
+    request<{ ok: boolean }>('/api/records', { method: 'PUT', token, body: { records } }),
 };

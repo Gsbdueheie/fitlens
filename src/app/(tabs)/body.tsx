@@ -7,7 +7,7 @@ import { TrendChart } from '@/components/charts';
 import { Badge, Button, Card, Chip, EmptyState, Screen, SectionTitle, StatTile } from '@/components/ui';
 import { fontSize, spacing, useTheme } from '@/constants/theme';
 import { useApp } from '@/context/app';
-import { confirmDialog } from '@/lib/confirm';
+import { confirmDialog, showAlert } from '@/lib/confirm';
 import { dateLabel, shortDate } from '@/lib/date';
 import { formatDelta, formatLength, formatWeight } from '@/lib/format';
 import type { BodyMeasurement } from '@/lib/types';
@@ -181,7 +181,9 @@ export default function BodyScreen() {
                       accessibilityRole="button"
                       accessibilityLabel={`删除 ${dateLabel(m.date)} 的记录`}
                       onPress={() =>
-                        confirmDialog('删除记录', `确定删除 ${dateLabel(m.date)} 的测量记录吗？`, () => deleteMeasurement(m.id))
+                        confirmDialog('删除记录', `确定删除 ${dateLabel(m.date)} 的测量记录吗？`, () => {
+                          deleteMeasurement(m.id).catch(() => showAlert('删除失败', '未能同步到服务器，请重试'));
+                        })
                       }
                       style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
                     >

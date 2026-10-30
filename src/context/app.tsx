@@ -12,6 +12,7 @@ import {
   FoodRecord,
   ManualBurn,
   UserProfile,
+  UserRecords,
   WorkoutRecord,
   type ProfilePatch,
 } from '@/lib/types';
@@ -104,6 +105,39 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  // 登录态（token）变化时，从服务端拉取该用户的记录（训练/饮食/身体测量/手动补充）。
+  // 服务端是记录的权威数据源，本地缓存仅作快速显示。
+  useEffect(() => {
+    const token = session?.token;
+    if (!token) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await api.records(token);
+        if (cancelled) return;
+        setWorkouts(res.records.workouts);
+        setFoods(res.records.foods);
+        setMeasurements(res.records.measurements);
+        setManualBurns(res.records.manualBurns);
+        await Promise.all([
+          saveJSON(STORAGE_KEYS.workouts, res.records.workouts),
+          saveJSON(STORAGE_KEYS.foods, res.records.foods),
+          saveJSON(STORAGE_KEYS.measurements, res.records.measurements),
+          saveJSON(STORAGE_KEYS.manualBurns, res.records.manualBurns),
+        ]);
+      } catch (e) {
+        if (e instanceof ApiError && e.status === 401 && !cancelled) {
+          setSession(null);
+          await saveJSON(STORAGE_KEYS.session, null);
+        }
+        // 其他错误（网络失败等）：保留本地缓存，之后可重试
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.token]);
+
   const profile = useMemo<UserProfile | null>(() => {
     if (!session) return null;
     const u = session.user;
@@ -146,6 +180,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       setSession(null);
       await saveJSON(STORAGE_KEYS.session, null);
+      // 清空本机记录，避免下一个账号登录前串用上一账号的数据（记录已同步在服务端）。
+      setWorkouts([]);
+      setFoods([]);
+      setMeasurements([]);
+      setManualBurns([]);
+      await Promise.all([
+        saveJSON(STORAGE_KEYS.workouts, []),
+        saveJSON(STORAGE_KEYS.foods, []),
+        saveJSON(STORAGE_KEYS.measurements, []),
+        saveJSON(STORAGE_KEYS.manualBurns, []),
+      ]);
     }
 
     async function updateNickname(nickname: string) {
@@ -172,45 +217,59 @@ export function AppProvider({ children }: { children: ReactNode }) {
       await saveJSON(STORAGE_KEYS.session, { token, user: res.user });
     }
 
+    /** 把记录推送到服务端（服务端为记录的权威数据源）。 */
+    async function pushRecords(records: UserRecords) {
+      const token = session?.token;
+      if (!token) return;
+      await api.putRecords(token, records);
+    }
+
+    /** 本地持久化 + 推送服务端。next 覆盖需要更新的集合，其余使用当前状态。 */
+    async function commitRecords(next: Partial<UserRecords>) {
+      const w = next.workouts ?? workouts;
+      const f = next.foods ?? foods;
+      const m = next.measurements ?? measurements;
+      const b = next.manualBurns ?? manualBurns;
+      await Promise.all([
+        saveJSON(STORAGE_KEYS.workouts, w),
+        saveJSON(STORAGE_KEYS.foods, f),
+        saveJSON(STORAGE_KEYS.measurements, m),
+        saveJSON(STORAGE_KEYS.manualBurns, b),
+      ]);
+      await pushRecords({ workouts: w, foods: f, measurements: m, manualBurns: b });
+    }
+
     async function saveWorkout(record: WorkoutRecord) {
-      setWorkouts((prev) => {
-        const idx = prev.findIndex((x) => x.id === record.id);
-        const next = idx >= 0 ? prev.map((x, i) => (i === idx ? record : x)) : [record, ...prev];
-        saveJSON(STORAGE_KEYS.workouts, next);
-        return next;
-      });
+      const idx = workouts.findIndex((x) => x.id === record.id);
+      const next = idx >= 0 ? workouts.map((x, i) => (i === idx ? record : x)) : [record, ...workouts];
+      setWorkouts(next);
+      await commitRecords({ workouts: next });
     }
 
     async function deleteWorkout(id: string) {
-      setWorkouts((prev) => {
-        const next = prev.filter((x) => x.id !== id);
-        saveJSON(STORAGE_KEYS.workouts, next);
-        return next;
-      });
+      const next = workouts.filter((x) => x.id !== id);
+      setWorkouts(next);
+      await commitRecords({ workouts: next });
     }
 
     async function saveFood(record: FoodRecord) {
-      setFoods((prev) => {
-        const idx = prev.findIndex((x) => x.id === record.id);
-        const next = idx >= 0 ? prev.map((x, i) => (i === idx ? record : x)) : [record, ...prev];
-        saveJSON(STORAGE_KEYS.foods, next);
-        return next;
-      });
+      const idx = foods.findIndex((x) => x.id === record.id);
+      const next = idx >= 0 ? foods.map((x, i) => (i === idx ? record : x)) : [record, ...foods];
+      setFoods(next);
+      await commitRecords({ foods: next });
     }
 
     async function deleteFood(id: string) {
-      setFoods((prev) => {
-        const next = prev.filter((x) => x.id !== id);
-        saveJSON(STORAGE_KEYS.foods, next);
-        return next;
-      });
+      const next = foods.filter((x) => x.id !== id);
+      setFoods(next);
+      await commitRecords({ foods: next });
     }
 
     async function saveMeasurement(record: BodyMeasurement) {
       const idx = measurements.findIndex((x) => x.id === record.id);
       const next = idx >= 0 ? measurements.map((x, i) => (i === idx ? record : x)) : [record, ...measurements];
       setMeasurements(next);
-      await saveJSON(STORAGE_KEYS.measurements, next);
+      await commitRecords({ measurements: next });
       // 一致性规则：最新一条带体重的测量 = 用户「当前体重」，同步写入个人资料（服务端），避免两处长期不一致。
       await syncProfileWeight(next);
     }
@@ -235,28 +294,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
 
     async function deleteMeasurement(id: string) {
-      setMeasurements((prev) => {
-        const next = prev.filter((x) => x.id !== id);
-        saveJSON(STORAGE_KEYS.measurements, next);
-        return next;
-      });
+      const next = measurements.filter((x) => x.id !== id);
+      setMeasurements(next);
+      await commitRecords({ measurements: next });
     }
 
     async function saveManualBurn(record: ManualBurn) {
-      setManualBurns((prev) => {
-        const idx = prev.findIndex((x) => x.id === record.id);
-        const next = idx >= 0 ? prev.map((x, i) => (i === idx ? record : x)) : [record, ...prev];
-        saveJSON(STORAGE_KEYS.manualBurns, next);
-        return next;
-      });
+      const idx = manualBurns.findIndex((x) => x.id === record.id);
+      const next = idx >= 0 ? manualBurns.map((x, i) => (i === idx ? record : x)) : [record, ...manualBurns];
+      setManualBurns(next);
+      await commitRecords({ manualBurns: next });
     }
 
     async function deleteManualBurn(id: string) {
-      setManualBurns((prev) => {
-        const next = prev.filter((x) => x.id !== id);
-        saveJSON(STORAGE_KEYS.manualBurns, next);
-        return next;
-      });
+      const next = manualBurns.filter((x) => x.id !== id);
+      setManualBurns(next);
+      await commitRecords({ manualBurns: next });
     }
 
     async function seedSampleData() {
@@ -265,12 +318,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setFoods(seed.foods);
       setMeasurements(seed.measurements);
       setManualBurns(seed.manualBurns);
-      await Promise.all([
-        saveJSON(STORAGE_KEYS.workouts, seed.workouts),
-        saveJSON(STORAGE_KEYS.foods, seed.foods),
-        saveJSON(STORAGE_KEYS.measurements, seed.measurements),
-        saveJSON(STORAGE_KEYS.manualBurns, seed.manualBurns),
-      ]);
+      await commitRecords({
+        workouts: seed.workouts,
+        foods: seed.foods,
+        measurements: seed.measurements,
+        manualBurns: seed.manualBurns,
+      });
     }
 
     async function clearAll() {

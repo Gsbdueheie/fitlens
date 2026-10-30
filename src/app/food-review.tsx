@@ -5,6 +5,7 @@ import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Badge, Button, Card, Chip, Field, Screen } from '@/components/ui';
 import { fontSize, radius, spacing, useTheme } from '@/constants/theme';
 import { useApp } from '@/context/app';
+import { showAlert } from '@/lib/confirm';
 import { todayISO } from '@/lib/date';
 import { formatPercent } from '@/lib/format';
 import { scalePer100, type Per100g } from '@/lib/nutrition';
@@ -104,6 +105,7 @@ export default function FoodReviewScreen() {
   const [calError, setCalError] = useState<string | null>(null);
   const [estimating, setEstimating] = useState(false);
   const [estimateMsg, setEstimateMsg] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   const confidence = existing?.confidence ?? rec?.confidence ?? null;
   const aiBasis = recEstimate?.basis ?? null;
@@ -224,7 +226,7 @@ export default function FoodReviewScreen() {
     setSearchMsg(null);
   }
 
-  function save() {
+  async function save() {
     const n = name.trim();
     const cal = parseFloat(calories);
     const amt = parseFloat(amount);
@@ -266,9 +268,18 @@ export default function FoodReviewScreen() {
       updatedAt: nowISO(),
     };
 
-    void saveFood(record);
-    clearDraft();
-    router.back();
+    setSaving(true);
+    try {
+      await saveFood(record);
+      clearDraft();
+      router.back();
+    } catch (e) {
+      const detail = e instanceof ApiError ? e.message : '请检查网络后重试';
+      // 本机记录已乐观更新；同步服务端失败时明确提示，不静默。
+      showAlert('保存失败', `未能同步到服务器：${detail}（记录已保留在本机，可重试）`);
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -430,7 +441,7 @@ export default function FoodReviewScreen() {
       </Text>
 
       <View style={styles.actions}>
-        <Button title="保存记录" icon="checkmark" onPress={save} />
+        <Button title="保存记录" icon="checkmark" loading={saving} onPress={save} />
         <Button title="取消" variant="ghost" onPress={() => router.back()} />
       </View>
     </Screen>

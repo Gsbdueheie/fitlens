@@ -97,6 +97,14 @@ export interface DailySummary {
   fat: number;
 }
 
+/** 单个用户在服务端持久化的全部记录（训练/饮食/身体测量/手动补充）。 */
+export interface UserRecords {
+  workouts: WorkoutRecord[];
+  foods: FoodRecord[];
+  measurements: BodyMeasurement[];
+  manualBurns: ManualBurn[];
+}
+
 /* ------------------------- AI 识别（后端返回） ------------------------- */
 
 export type NutritionQuality = 'reference' | 'official' | 'estimated' | 'pending';

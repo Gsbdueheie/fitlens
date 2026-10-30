@@ -11,7 +11,7 @@ import config from './config.js';
 
 const file = path.join(config.dataDir, 'db.json');
 
-let data = { users: [], sessions: [] };
+let data = { users: [], sessions: [], records: {} };
 let loaded = false;
 let writeQueue = Promise.resolve();
 
@@ -20,7 +20,7 @@ function ensureLoaded() {
   fs.mkdirSync(config.dataDir, { recursive: true });
   try {
     const raw = fs.readFileSync(file, 'utf8');
-    data = { users: [], sessions: [], ...JSON.parse(raw) };
+    data = { users: [], sessions: [], records: {}, ...JSON.parse(raw) };
   } catch {
     // 首次运行或文件损坏时从空开始
   }
@@ -88,5 +88,23 @@ export function addSession(session) {
 export function removeSession(token) {
   ensureLoaded();
   data.sessions = data.sessions.filter((s) => s.token !== token);
+  return persist();
+}
+
+// ---- records（按 userId 存储训练/饮食/身体测量/手动补充） ----
+
+const EMPTY_RECORDS = { workouts: [], foods: [], measurements: [], manualBurns: [] };
+
+export function getRecords(userId) {
+  ensureLoaded();
+  const r = data.records[userId];
+  return r && typeof r === 'object'
+    ? { ...EMPTY_RECORDS, ...r }
+    : { ...EMPTY_RECORDS };
+}
+
+export function putRecords(userId, records) {
+  ensureLoaded();
+  data.records[userId] = records;
   return persist();
 }

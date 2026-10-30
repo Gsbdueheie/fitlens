@@ -9,6 +9,8 @@ import { useApp } from '@/context/app';
 import { addDays, dateLabel, todayISO } from '@/lib/date';
 import { MOOD_LABEL, WORKOUT_TYPES, type Mood, type WorkoutRecord } from '@/lib/types';
 import { nowISO, round, uid } from '@/lib/util';
+import { showAlert } from '@/lib/confirm';
+import { ApiError } from '@/services/api';
 
 const MOODS: (Mood | null)[] = [null, 'great', 'ok', 'tired'];
 
@@ -28,8 +30,9 @@ export default function WorkoutEditScreen() {
   const [mood, setMood] = useState<Mood>(existing?.mood ?? null);
   const [note, setNote] = useState(existing?.note ?? '');
   const [errors, setErrors] = useState<{ duration?: string; calories?: string }>({});
+  const [saving, setSaving] = useState(false);
 
-  function save() {
+  async function save() {
     const dur = parseFloat(duration);
     const cal = calories.trim() === '' ? null : parseFloat(calories);
     const next: { duration?: string; calories?: string } = {};
@@ -49,8 +52,18 @@ export default function WorkoutEditScreen() {
       createdAt: existing?.createdAt ?? nowISO(),
       updatedAt: nowISO(),
     };
-    void saveWorkout(record);
-    router.back();
+
+    setSaving(true);
+    try {
+      await saveWorkout(record);
+      router.back();
+    } catch (e) {
+      const detail = e instanceof ApiError ? e.message : '请检查网络后重试';
+      // 本机记录已乐观更新；同步服务端失败时明确提示，不静默。
+      showAlert('保存失败', `未能同步到服务器：${detail}（记录已保留在本机，可重试）`);
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -132,7 +145,7 @@ export default function WorkoutEditScreen() {
         />
 
         <View style={styles.actions}>
-          <Button title="保存" icon="checkmark" onPress={save} />
+          <Button title="保存" icon="checkmark" loading={saving} onPress={save} />
           <Button title="取消" variant="ghost" onPress={() => router.back()} />
         </View>
       </View>

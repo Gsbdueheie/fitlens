@@ -237,7 +237,7 @@ export default function LoginScreen() {
         <View style={styles.noticeRow}>
           <Ionicons name="shield-checkmark-outline" size={18} color={colors.primaryDeep} />
           <Text style={[styles.noticeText, { color: colors.text }]}>
-            账号、密码、头像与个人资料（身高/体重/目标等）均安全存储于服务端，验证码由服务端校验；训练/饮食/身体测量记录仍保存在本机，跨设备同步尚未实现。
+            账号、密码、头像、个人资料及训练/饮食/身体测量记录均安全存储于服务端，可跨设备读取；验证码由服务端校验。
           </Text>
         </View>
       </Card>

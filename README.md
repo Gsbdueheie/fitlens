@@ -218,8 +218,8 @@ npx wrangler deploy                   # 部署，得到 https://fitlens-server.<
 
 - 数据模型见 [`src/lib/types.ts`](src/lib/types.ts)。
 - **账号/密码/会话/个人资料/头像**：存储在**后端**（`server/data/db.json`，文件持久化，生产可替换为数据库）。个人资料含昵称、头像、健身目标、每日目标摄入、身高、体重、年龄、性别。
-- **头像存储**：Express 版存本地文件 `server/data/uploads/`；Cloudflare 版存 KV（`avatar:<userId>`）。均以 data URL 返回，前端不落本地持久化。
-- **训练/饮食/身体记录**：仍存储在**本机**（localStorage / AsyncStorage）——**多设备同步尚未实现**，这是明确的已知限制。
+- **头像存储**：Express 版存本地文件 `server/data/uploads/<userId>-<version>.<ext>`；Cloudflare 版存 KV（`avatar:<userId>:<version>`，版本化 key）。均以 data URL 返回，前端不落本地持久化。
+- **训练/饮食/身体测量记录**：已同步到**服务端**（`GET/PUT /api/records`；Express 存 `db.json` 的 `records` 字段，Cloudflare 版存 KV `records:<userId>`）。前端登录/刷新时从服务端拉取，增删改时推送；本地 localStorage / AsyncStorage 仅作离线缓存。食物记录的 `imageUri`（照片）为本地引用，不随记录同步。
 - **热量单位**：内部统一 **kcal**，界面显示「千卡」；主要界面不混用 kcal/千卡。
 - **每日剩余** = 目标 + 训练消耗 − 摄入；训练消耗 = 训练记录消耗之和 + 手动补充（只汇总一次）。
 - **「运动消耗」仅指主动运动消耗，不等于全天总能量消耗**（基础代谢未计入）。
@@ -230,7 +230,7 @@ npx wrangler deploy                   # 部署，得到 https://fitlens-server.<
 
 1. **Cloudflare `*.workers.dev` 域名在中国大陆访问不稳定**（可能需代理）；如需国内稳定访问，改用国内云函数或绑定自定义域名。
 2. **内置 CAPTCHA 非生产级**：需接入 Turnstile 等成熟服务才可视为生产防护。
-3. **记录存本机**：训练/饮食/身体数据仅本机，无跨设备同步（账号在云端，记录在本地，已明确标注）。
+3. **记录同步为「整份快照覆盖」**：`PUT /api/records` 采用整份覆盖，多设备并发写入会后者覆盖前者；食物照片（`imageUri`）不随记录同步。单人演示足够，多端并发编辑建议改为增量接口。
 4. **后端账号存储为 KV（最终一致）**：单用户演示足够；高并发/多实例建议换 D1 数据库。
 5. **Android APK 未实际生成**：需 EAS 账号云构建；iOS 未配置。
 6. **营养表覆盖有限**：内置约 111 种常见食物（近似值），家常菜/品牌饮品等标注「估算/待核实」；查不到时允许手动编辑。

@@ -17,3 +17,12 @@ export function confirmDialog(
     { text: '删除', style: 'destructive', onPress: onConfirm },
   ]);
 }
+
+/** 跨端提示（非确认）：原生用 Alert，Web 用 window.alert。 */
+export function showAlert(title: string, message: string): void {
+  if (Platform.OS === 'web') {
+    if (typeof window !== 'undefined') window.alert(`${title}\n\n${message}`);
+    return;
+  }
+  Alert.alert(title, message);
+}

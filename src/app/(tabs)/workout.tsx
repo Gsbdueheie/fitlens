@@ -5,7 +5,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Badge, Button, Card, EmptyState, Screen, workoutIcon } from '@/components/ui';
 import { fontSize, radius, spacing, useTheme } from '@/constants/theme';
 import { useApp } from '@/context/app';
-import { confirmDialog } from '@/lib/confirm';
+import { confirmDialog, showAlert } from '@/lib/confirm';
 import { addDays, dateLabel, todayISO } from '@/lib/date';
 import { formatKcal } from '@/lib/format';
 import { MOOD_LABEL } from '@/lib/types';
@@ -78,7 +78,11 @@ export default function WorkoutScreen() {
                   hitSlop={8}
                   accessibilityRole="button"
                   accessibilityLabel={`删除 ${w.type} 训练`}
-                  onPress={() => confirmDialog('删除记录', `确定删除「${w.type}」这条训练吗？`, () => deleteWorkout(w.id))}
+                  onPress={() =>
+                    confirmDialog('删除记录', `确定删除「${w.type}」这条训练吗？`, () => {
+                      deleteWorkout(w.id).catch(() => showAlert('删除失败', '未能同步到服务器，请重试'));
+                    })
+                  }
                   style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
                 >
                   <Ionicons name="trash-outline" size={18} color={colors.textMuted} />

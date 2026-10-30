@@ -7,7 +7,7 @@ import * as auth from './auth.js';
 import { recognizeFood } from './deepseek.js';
 import { calcNutrition, searchFoods } from './nutrition.js';
 import { chat } from './chat.js';
-import { updateUser } from './store.js';
+import { getRecords, putRecords, updateUser } from './store.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -128,6 +128,28 @@ function validateImage(base64, mime) {
     return { error: '图片数据编码无效' };
   }
   return { bytes };
+}
+
+const RECORD_KEYS = ['workouts', 'foods', 'measurements', 'manualBurns'];
+const MAX_RECORDS = 5000;
+
+/** 校验并规范化记录集合，返回 { workouts, foods, measurements, manualBurns }。 */
+function sanitizeRecords(input) {
+  const src = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
+  const out = { workouts: [], foods: [], measurements: [], manualBurns: [] };
+  for (const key of RECORD_KEYS) {
+    const arr = Array.isArray(src[key]) ? src[key] : [];
+    out[key] = arr
+      .filter((it) => it && typeof it === 'object' && !Array.isArray(it))
+      .slice(0, MAX_RECORDS)
+      .map((it) => {
+        const rec = { ...it, id: String(it.id || '').slice(0, 64), date: String(it.date || '').slice(0, 32) };
+        // 食物记录的 imageUri 是本地图片引用（本机 URI/data URL），不随记录同步到服务端。
+        if (key === 'foods') rec.imageUri = null;
+        return rec;
+      });
+  }
+  return out;
 }
 
 /* ------------------------------- 中间件 ------------------------------- */
@@ -344,6 +366,16 @@ app.post('/api/chat', requireAuth, async (req, res) => {
   const result = await chat(messages);
   if (result.error) return res.status(502).json({ error: result.error });
   res.json(result);
+});
+
+app.get('/api/records', requireAuth, (req, res) => {
+  res.json({ records: getRecords(req.auth.user.id) });
+});
+
+app.put('/api/records', requireAuth, async (req, res) => {
+  const records = sanitizeRecords((req.body || {}).records);
+  await putRecords(req.auth.user.id, records);
+  res.json({ ok: true });
 });
 
 app.use((_req, res) => res.status(404).json({ error: '接口不存在' }));

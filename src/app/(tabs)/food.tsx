@@ -6,7 +6,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Badge, Button, Card, EmptyState, Screen } from '@/components/ui';
 import { fontSize, radius, spacing, useTheme } from '@/constants/theme';
 import { useApp } from '@/context/app';
-import { confirmDialog } from '@/lib/confirm';
+import { confirmDialog, showAlert } from '@/lib/confirm';
 import { addDays, dateLabel, todayISO } from '@/lib/date';
 import { formatKcal, formatKcalCompact } from '@/lib/format';
 import { computeDailySummary, resolveTarget } from '@/lib/nutrition';
@@ -127,7 +127,9 @@ export default function FoodScreen() {
                           accessibilityRole="button"
                           accessibilityLabel={`删除 ${f.foodName}`}
                           onPress={() =>
-                            confirmDialog('删除记录', `确定删除「${f.foodName}」吗？`, () => deleteFood(f.id))
+                            confirmDialog('删除记录', `确定删除「${f.foodName}」吗？`, () => {
+                              deleteFood(f.id).catch(() => showAlert('删除失败', '未能同步到服务器，请重试'));
+                            })
                           }
                           style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
                         >

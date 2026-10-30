@@ -65,9 +65,9 @@ export default function BodyEditScreen() {
       await saveMeasurement(record);
       router.back();
     } catch (e) {
-      // 本地测量已保存；同步体重到个人资料失败时明确提示，不静默退回示例值。
+      // 本地测量已保存；同步到服务器失败时明确提示，不静默退回示例值。
       const detail = e instanceof ApiError ? e.message : '请检查网络后重试';
-      setError(`测量已保存到本机，但同步体重到个人资料失败：${detail}`);
+      setError(`保存失败，未能同步到服务器：${detail}（测量已保留在本机，可重试）`);
     } finally {
       setSaving(false);
     }

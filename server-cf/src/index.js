@@ -650,6 +650,40 @@ async function publicUserWithAvatar(env, user) {
   return pu;
 }
 
+/* ------------------------------ 记录（KV） ------------------------------ */
+
+const RECORD_KEYS = ['workouts', 'foods', 'measurements', 'manualBurns'];
+const MAX_RECORDS = 5000;
+
+function sanitizeRecords(input) {
+  const src = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
+  const out = { workouts: [], foods: [], measurements: [], manualBurns: [] };
+  for (const key of RECORD_KEYS) {
+    const arr = Array.isArray(src[key]) ? src[key] : [];
+    out[key] = arr
+      .filter((it) => it && typeof it === 'object' && !Array.isArray(it))
+      .slice(0, MAX_RECORDS)
+      .map((it) => {
+        const rec = { ...it, id: String(it.id || '').slice(0, 64), date: String(it.date || '').slice(0, 32) };
+        // 食物记录的 imageUri 是本地图片引用（本机 URI/data URL），不随记录同步到服务端。
+        if (key === 'foods') rec.imageUri = null;
+        return rec;
+      });
+  }
+  return out;
+}
+
+async function getRecords(env, userId) {
+  const r = await env.FITLENS_KV.get(`records:${userId}`, 'json');
+  return r && typeof r === 'object'
+    ? { workouts: [], foods: [], measurements: [], manualBurns: [], ...r }
+    : { workouts: [], foods: [], measurements: [], manualBurns: [] };
+}
+
+async function putRecords(env, userId, records) {
+  await env.FITLENS_KV.put(`records:${userId}`, JSON.stringify(records));
+}
+
 /* ------------------------------ 路由 ------------------------------ */
 
 export default {
@@ -847,6 +881,19 @@ const ROUTES = {
     const result = await chatAssistant(env, b.messages);
     if (result.error) return json({ error: result.error }, 502, h);
     return json(result, 200, h);
+  },
+
+  'GET /api/records': async (req, env, h) => {
+    const a = await requireAuth(req, env);
+    return json({ records: await getRecords(env, a.session.userId) }, 200, h);
+  },
+
+  'PUT /api/records': async (req, env, h) => {
+    const a = await requireAuth(req, env);
+    const b = await bodyJson(req);
+    const records = sanitizeRecords(b.records);
+    await putRecords(env, a.session.userId, records);
+    return json({ ok: true }, 200, h);
   },
 };
 
