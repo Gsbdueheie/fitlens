@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Badge, Button, Card, Chip, Field, Screen } from '@/components/ui';
 import { fontSize, radius, spacing, useTheme } from '@/constants/theme';
@@ -8,12 +8,19 @@ import { useApp } from '@/context/app';
 import { todayISO } from '@/lib/date';
 import { formatPercent } from '@/lib/format';
 import { scalePer100, type Per100g } from '@/lib/nutrition';
-import { MEAL_LABEL, type FoodRecord, type MealType } from '@/lib/types';
+import { MEAL_LABEL, type FoodEntry, type FoodRecord, type MealType, type NutritionQuality } from '@/lib/types';
 import { nowISO, round, uid } from '@/lib/util';
 import { api, ApiError } from '@/services/api';
 import { clearDraft, getDraft } from '@/services/ai/draft';
 
 const MEAL_ORDER: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack'];
+
+const QUALITY_LABEL: Record<NutritionQuality, string> = {
+  reference: '通用参考值',
+  official: '官方公布值',
+  estimated: '估算值',
+  pending: '待核实',
+};
 
 const PORTION_REF =
   '份量参考：一碗米饭≈200g · 一个鸡蛋≈50g · 一掌心瘦肉≈100g · 一个苹果≈180g · 一杯牛奶≈250ml';
@@ -90,6 +97,9 @@ export default function FoodReviewScreen() {
   const portion = rec?.portion ?? '';
   const baseAmount = rec?.amount ?? 200;
   const [tier, setTier] = useState<'small' | 'medium' | 'large'>('medium');
+  const [searchResults, setSearchResults] = useState<FoodEntry[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [searchMsg, setSearchMsg] = useState<string | null>(null);
 
   function handleAmount(t: string) {
     setAmount(t);
@@ -154,6 +164,48 @@ export default function FoodReviewScreen() {
     }
   }
 
+  /** 搜索食物营养数据库，列出候选供用户选择。 */
+  async function search() {
+    if (!session?.token) return;
+    if (!name.trim()) {
+      setSearchMsg('请先输入食物名称');
+      return;
+    }
+    setSearching(true);
+    setSearchMsg(null);
+    setSearchResults([]);
+    try {
+      const res = await api.searchFoods(session.token, name.trim());
+      setSearchResults(res.foods);
+      if (res.foods.length === 0) setSearchMsg('未找到匹配食物，可尝试更短的关键词');
+    } catch (e) {
+      setSearchMsg(e instanceof ApiError ? e.message : '搜索失败');
+    } finally {
+      setSearching(false);
+    }
+  }
+
+  /** 选中某条数据库记录：回填名称/默认份量，并按每 100g 数值换算营养素。 */
+  function pickSearchResult(entry: FoodEntry) {
+    setName(entry.name);
+    setAmount(String(entry.defaultPortion.amount));
+    const p: Per100g = {
+      calories: round(entry.per100.calories),
+      protein: round(entry.per100.protein, 1),
+      carbs: round(entry.per100.carbs, 1),
+      fat: round(entry.per100.fat, 1),
+    };
+    setPer100(p);
+    const s = scalePer100(p, entry.defaultPortion.amount);
+    setCalories(String(s.calories));
+    setProtein(String(s.protein));
+    setCarbs(String(s.carbs));
+    setFat(String(s.fat));
+    setNutritionSource(entry.source);
+    setSearchResults([]);
+    setSearchMsg(null);
+  }
+
   function save() {
     const n = name.trim();
     const cal = parseFloat(calories);
@@ -210,9 +262,25 @@ export default function FoodReviewScreen() {
                 {confidence != null ? (
                   <Badge label={`置信度 ${formatPercent(confidence)}`} color={colors.textMuted} />
                 ) : null}
-                {nutritionSource ? <Badge label="含营养估算" color={colors.success} /> : null}
+                {rec?.matchTier === 'database' ? (
+                  <Badge label="数据库匹配" color={colors.success} icon="checkmark-circle-outline" />
+                ) : rec?.calorieRange ? (
+                  <Badge label="AI 估算" color={colors.warning} icon="alert-circle-outline" />
+                ) : (
+                  <Badge label="未匹配库" color={colors.textMuted} />
+                )}
               </View>
               <Text style={[styles.uncertainty, { color: colors.textSecondary }]}>{uncertaintyNote}</Text>
+              {rec?.nutrition?.source ? (
+                <Text style={[styles.sourceNote, { color: colors.textSecondary }]}>
+                  营养来源：{rec.nutrition.source}
+                  {rec.nutrition.quality ? `（${QUALITY_LABEL[rec.nutrition.quality]}）` : ''}
+                </Text>
+              ) : rec?.calorieRange ? (
+                <Text style={[styles.sourceNote, { color: colors.warning }]}>
+                  AI 估算热量范围：{rec.calorieRange}（请核对后再保存）
+                </Text>
+              ) : null}
               {ingredients.length > 0 ? (
                 <View style={styles.ingredients}>
                   {ingredients.map((ing, i) => (
@@ -272,6 +340,50 @@ export default function FoodReviewScreen() {
         {estimateMsg ? (
           <Text style={[styles.estimateMsg, { color: colors.textSecondary }]}>{estimateMsg}</Text>
         ) : null}
+
+        <View style={styles.searchBlock}>
+          <Button
+            title={searching ? '搜索中…' : '搜索食物库'}
+            variant="secondary"
+            icon="search-outline"
+            loading={searching}
+            fullWidth={false}
+            onPress={search}
+          />
+        </View>
+        {searchMsg ? (
+          <Text style={[styles.estimateMsg, { color: colors.textSecondary }]}>{searchMsg}</Text>
+        ) : null}
+        {searchResults.length > 0 ? (
+          <View style={styles.searchList}>
+            {searchResults.map((entry) => (
+              <Pressable
+                key={entry.name}
+                onPress={() => pickSearchResult(entry)}
+                accessibilityRole="button"
+                accessibilityLabel={`选用 ${entry.name}`}
+                style={({ pressed }) => [
+                  styles.searchItem,
+                  { backgroundColor: colors.surfaceAlt, opacity: pressed ? 0.7 : 1 },
+                ]}
+              >
+                <View style={styles.searchItemMain}>
+                  <Text style={[styles.searchName, { color: colors.text }]} numberOfLines={1}>
+                    {entry.name}
+                    {entry.brand ? ` · ${entry.brand}` : ''}
+                    {entry.style ? ` · ${entry.style}` : ''}
+                    {entry.size ? ` · ${entry.size}` : ''}
+                  </Text>
+                  <Text style={[styles.searchMeta, { color: colors.textSecondary }]} numberOfLines={1}>
+                    {entry.per100.calories} 千卡/100{entry.per100Unit === 'ml' ? 'ml' : 'g'} · {QUALITY_LABEL[entry.quality]}
+                  </Text>
+                </View>
+                <Text style={[styles.searchAdd, { color: colors.primary }]}>选用</Text>
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
+
         <Field label="热量" value={calories} onChangeText={setCalories} placeholder="kcal" keyboardType="decimal-pad" suffix="千卡" error={calError} />
         <View style={styles.macroRow}>
           <View style={styles.macroCol}>
@@ -305,6 +417,7 @@ const styles = StyleSheet.create({
   infoBody: { flex: 1, gap: spacing.sm },
   badgeRow: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' },
   uncertainty: { fontSize: fontSize.xs, lineHeight: 17 },
+  sourceNote: { fontSize: fontSize.xs, lineHeight: 17 },
   ingredients: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
   label: { fontSize: fontSize.sm, fontWeight: '600', marginBottom: spacing.sm },
   mealRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.lg },
@@ -312,6 +425,20 @@ const styles = StyleSheet.create({
   estimateRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.sm },
   source: { flex: 1, fontSize: fontSize.xs },
   estimateMsg: { fontSize: fontSize.xs, marginBottom: spacing.sm },
+  searchBlock: { marginBottom: spacing.sm },
+  searchList: { gap: spacing.sm, marginBottom: spacing.sm },
+  searchItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    gap: spacing.md,
+  },
+  searchItemMain: { flex: 1, gap: 2 },
+  searchName: { fontSize: fontSize.sm, fontWeight: '600' },
+  searchMeta: { fontSize: fontSize.xs },
+  searchAdd: { fontSize: fontSize.sm, fontWeight: '600' },
   macroRow: { flexDirection: 'row', gap: spacing.sm },
   macroCol: { flex: 1 },
   portionHint: { fontSize: fontSize.sm, marginTop: -spacing.xs, marginBottom: spacing.xs },

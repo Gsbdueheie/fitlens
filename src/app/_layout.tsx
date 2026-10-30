@@ -38,6 +38,7 @@ function RootNavigator() {
           <Stack.Screen name="food-review" />
           <Stack.Screen name="workout-edit" />
           <Stack.Screen name="body-edit" />
+          <Stack.Screen name="assistant" />
         </Stack.Protected>
         <Stack.Protected guard={!session}>
           <Stack.Screen name="login" />

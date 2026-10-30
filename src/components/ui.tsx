@@ -52,6 +52,7 @@ export function Screen({
   right,
   maxWidth = 680,
   bottomInset = true,
+  fill = false,
 }: {
   children: React.ReactNode;
   scroll?: boolean;
@@ -60,6 +61,7 @@ export function Screen({
   right?: React.ReactNode;
   maxWidth?: number;
   bottomInset?: boolean;
+  fill?: boolean;
 }) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
@@ -91,6 +93,7 @@ export function Screen({
     <View
       style={[
         styles.inner,
+        fill && styles.fill,
         {
           maxWidth,
           paddingTop: title || onBack ? spacing.md : insets.top + spacing.md,
@@ -435,6 +438,7 @@ export function StatTile({
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
+  fill: { flex: 1 },
   scrollContent: { flexGrow: 1 },
   inner: {
     width: '100%',

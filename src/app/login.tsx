@@ -10,6 +10,13 @@ import { api, ApiError } from '@/services/api';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// 与后端 validPassword 规则一致：至少 8 位 + 至少一个字母 + 至少一个数字（不要求特殊字符）。
+const PASSWORD_RULES: { key: string; label: string; test: (p: string) => boolean }[] = [
+  { key: 'length', label: '至少 8 位', test: (p) => p.length >= 8 },
+  { key: 'letter', label: '至少一个字母', test: (p) => /[A-Za-z]/.test(p) },
+  { key: 'digit', label: '至少一个数字', test: (p) => /\d/.test(p) },
+];
+
 export default function LoginScreen() {
   const router = useRouter();
   const { colors } = useTheme();
@@ -25,6 +32,8 @@ export default function LoginScreen() {
   const [captchaInput, setCaptchaInput] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  const passwordRules = PASSWORD_RULES.map((r) => ({ ...r, ok: r.test(password) }));
 
   async function refreshCaptcha() {
     try {
@@ -133,6 +142,22 @@ export default function LoginScreen() {
           autoCapitalize="none"
         />
         <Field label="密码" value={password} onChangeText={setPassword} placeholder="至少 8 位，含字母和数字" secureTextEntry />
+        {mode === 'register' ? (
+          <View style={styles.rules}>
+            {passwordRules.map((r) => (
+              <View key={r.key} style={styles.ruleRow}>
+                <Ionicons
+                  name={r.ok ? 'checkmark-circle' : 'ellipse-outline'}
+                  size={14}
+                  color={r.ok ? colors.success : colors.textMuted}
+                />
+                <Text style={[styles.ruleText, { color: r.ok ? colors.success : colors.textMuted }]}>
+                  {r.label}
+                </Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
 
         {mode === 'register' ? (
           <>
@@ -190,6 +215,9 @@ const styles = StyleSheet.create({
   modeBtn: { flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: radius.md },
   modeText: { fontSize: fontSize.sm, fontWeight: '600' },
   label: { fontSize: fontSize.sm, fontWeight: '600' },
+  rules: { gap: 2, marginTop: -spacing.xs, marginBottom: spacing.sm },
+  ruleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  ruleText: { fontSize: fontSize.xs },
   captchaRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md },
   captchaImg: { width: 120, height: 44, borderRadius: radius.sm },
   captchaPlaceholder: {},

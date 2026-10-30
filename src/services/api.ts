@@ -78,4 +78,13 @@ export const api = {
       token,
       body,
     }),
+
+  searchFoods: (token: string, query: string) =>
+    request<{ foods: import('@/lib/types').FoodEntry[] }>(
+      `/api/foods/search?q=${encodeURIComponent(query)}`,
+      { token },
+    ),
+
+  chat: (token: string, messages: import('@/lib/types').ChatMessage[]) =>
+    request<{ reply: string }>('/api/chat', { method: 'POST', token, body: { messages } }),
 };

@@ -88,8 +88,15 @@ export interface DailySummary {
 
 /* ------------------------- AI 识别（后端返回） ------------------------- */
 
+export type NutritionQuality = 'reference' | 'official' | 'estimated' | 'pending';
+export type MatchTier = 'database' | 'none';
+
 export interface NutritionEstimate {
   source: string;
+  sourceLink?: string | null;
+  quality?: NutritionQuality | null;
+  matchedName?: string | null;
+  per100Unit?: 'g' | 'ml' | null;
   calories: number;
   protein: number;
   carbs: number;
@@ -102,12 +109,36 @@ export interface RecognizedFood {
   portion?: string; // 份量描述（约一碗/半盘/一个拳头大小）
   ingredients: string[];
   confidence: number; // 0..1
+  matchTier?: MatchTier; // database = 命中营养数据库；none = 未命中
   nutrition: NutritionEstimate | null;
+  calorieRange?: string | null; // 数据库未命中时的 AI 粗略估算范围
 }
 
 export interface RecognizeResponse {
   foods: RecognizedFood[];
   uncertainty: string;
+}
+
+/** 后端营养数据库中的一条食物记录。 */
+export interface FoodEntry {
+  name: string;
+  aliases: string[];
+  category: string;
+  brand: string | null;
+  style: string | null;
+  size: string | null;
+  per100: { calories: number; protein: number; carbs: number; fat: number };
+  per100Unit: 'g' | 'ml';
+  defaultPortion: { amount: number; unit: string };
+  source: string;
+  sourceLink: string | null;
+  updatedAt: string;
+  quality: NutritionQuality;
+}
+
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
 }
 
 /* ------------------------------ 常量标签 ------------------------------ */

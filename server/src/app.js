@@ -5,7 +5,8 @@ import { createCaptcha, verifyCaptcha } from './captcha.js';
 import { rateLimit, clientIp } from './rateLimit.js';
 import * as auth from './auth.js';
 import { recognizeFood } from './deepseek.js';
-import { calcNutrition } from './nutrition.js';
+import { calcNutrition, searchFoods } from './nutrition.js';
+import { chat } from './chat.js';
 import { updateUser } from './store.js';
 
 const app = express();
@@ -191,10 +192,15 @@ app.post('/api/recognize', requireAuth, async (req, res) => {
   const result = await recognizeFood({ imageBase64, mimeType });
   if (result.error) return res.status(502).json({ error: result.error });
 
-  const foods = result.foods.map((f) => ({
-    ...f,
-    nutrition: calcNutrition(f.name, f.amount),
-  }));
+  // 优先查营养数据库；查不到再用模型的粗略热量范围作为「AI 估算」兜底。
+  const foods = result.foods.map((f) => {
+    const { estimatedCalories, ...rest } = f;
+    const nutrition = calcNutrition(f.name, f.amount);
+    if (nutrition) {
+      return { ...rest, matchTier: 'database', nutrition, calorieRange: null };
+    }
+    return { ...rest, matchTier: 'none', nutrition: null, calorieRange: estimatedCalories || null };
+  });
   res.json({ foods, uncertainty: result.uncertainty });
 });
 
@@ -203,6 +209,20 @@ app.post('/api/nutrition', requireAuth, (req, res) => {
   if (!name) return res.status(400).json({ error: '缺少食物名称' });
   const nutrition = calcNutrition(name, Number(amount) || 0);
   res.json({ nutrition }); // 未查到时为 null
+});
+
+app.get('/api/foods/search', requireAuth, (req, res) => {
+  const q = String(req.query.q || '').trim();
+  res.json({ foods: q ? searchFoods(q, 20) : [] });
+});
+
+app.post('/api/chat', requireAuth, async (req, res) => {
+  const { messages } = req.body || {};
+  const rl = rateLimit(`chat:user:${req.auth.user.id}`, { windowMs: 60000, max: 30 });
+  if (!rl.ok) return res.status(429).json({ error: '请求过于频繁，请稍后再试' });
+  const result = await chat(messages);
+  if (result.error) return res.status(502).json({ error: result.error });
+  res.json(result);
 });
 
 app.use((_req, res) => res.status(404).json({ error: '接口不存在' }));

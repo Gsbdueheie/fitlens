@@ -175,35 +175,54 @@ function rateLimit(key, windowMs, max) {
 
 /* ------------------------------ 营养 ------------------------------ */
 
-function lookupFood(name) {
-  const raw = String(name || '').trim().toLowerCase();
-  if (!raw) return null;
-  // 去掉括号说明与常见量词/修饰词，提高命中率（如「一碗米饭」→「米饭」）
-  const n = raw
+function normalize(s) {
+  return String(s || '')
+    .trim()
+    .toLowerCase()
     .replace(/[（(].*?[)）]/g, '')
     .replace(/(约|大约|一小份|一份|半份|小份|中份|大份|一掌心|一个|一碗|一盘|半碗|半个|一整)/g, '')
-    .replace(/\s+/g, '');
-  if (!n) return null;
-  let best = null;
-  for (const f of foods) {
-    const fn = f.name.toLowerCase();
-    if (fn === n) return f;
-    if (n.includes(fn) || fn.includes(n)) {
-      if (!best || fn.length > best.name.length) best = f;
-    }
-  }
-  return best;
+    .replace(/[\s·.、,，_-]+/g, '');
 }
-function calcNutrition(foodName, amountG) {
+function scoreFood(f, qn) {
+  const name = normalize(f.name);
+  if (name === qn) return 1000;
+  const aliases = (f.aliases || []).map(normalize);
+  if (aliases.includes(qn)) return 900;
+  if (name.includes(qn)) return 800 - name.length;
+  if (qn.includes(name) && name.length >= 2) return 700 - name.length;
+  for (const a of aliases) {
+    if (a.includes(qn)) return 600 - a.length;
+    if (qn.includes(a) && a.length >= 2) return 500 - a.length;
+  }
+  return 0;
+}
+function searchFoods(query, limit = 20) {
+  const qn = normalize(query);
+  if (!qn) return [];
+  return foods
+    .map((food) => ({ food, score: scoreFood(food, qn) }))
+    .filter((x) => x.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit)
+    .map((x) => x.food);
+}
+function lookupFood(name) {
+  return searchFoods(name, 1)[0] ?? null;
+}
+function calcNutrition(foodName, amount) {
   const f = lookupFood(foodName);
   if (!f) return null;
-  const k = Math.max(0, Number(amountG) || 0) / 100;
+  const k = Math.max(0, Number(amount) || 0) / 100;
   return {
-    source: '内置食物营养表（近似值）',
-    calories: Math.round(f.calories * k),
-    protein: round1(f.protein * k),
-    carbs: round1(f.carbs * k),
-    fat: round1(f.fat * k),
+    source: f.source,
+    sourceLink: f.sourceLink,
+    quality: f.quality,
+    matchedName: f.name,
+    per100Unit: f.per100Unit,
+    calories: Math.round(f.per100.calories * k),
+    protein: round1(f.per100.protein * k),
+    carbs: round1(f.per100.carbs * k),
+    fat: round1(f.per100.fat * k),
   };
 }
 function round1(n) {
@@ -214,13 +233,14 @@ function round1(n) {
 
 const SYSTEM_PROMPT = [
   '你是营养分析助手。请识别这张食物照片，只输出一个 JSON 对象（不要输出任何其他文字，不要用 Markdown 代码块），格式如下：',
-  '{"foods":[{"name":"食物名称（中文）","amount":"估算克数(数字)","portion":"份量描述，如 约一碗/约半盘/约一个拳头大小","ingredients":["可辨认的食材"],"confidence":0到1}],"uncertainty":"关于份量与热量不确定性的简短中文说明"}',
+  '{"foods":[{"name":"食物名称（中文）","amount":"估算克数(数字)","portion":"份量描述，如 约一碗/约半盘/约一个拳头大小","ingredients":["可辨认的食材"],"confidence":0到1,"estimatedCalories":"约 300-500 千卡"}],"uncertainty":"关于份量与热量不确定性的简短中文说明"}',
   '要求：',
   '- 用常见参照物（碗/盘/拳头/手掌/筷子）估算份量，amount 给出克数，portion 给出文字描述；',
   '- 份量克数是粗略估算，务必在 uncertainty 提醒用户核对份量；',
   '- 热量无法从照片精确测得，油、酱料、配方、隐藏食材都会影响热量；',
+  '- 不要输出精确的热量或营养数值；营养优先由服务端查营养数据库计算；',
+  '- 仅在无法给出常见食物名时，才在 estimatedCalories 给一个粗略热量范围（如「约 300-500 千卡」），该值仅作估算兜底；',
   '- 混合菜、遮挡、模糊或不确定时降低 confidence。',
-  '- 不要输出任何热量或营养数值（卡路里/蛋白质/碳水/脂肪）；营养由服务端按「食物名 + 份量」查表计算，模型只需给出名称与份量。',
 ].join('\n');
 
 async function recognizeFood(env, imageBase64, mimeType) {
@@ -279,6 +299,7 @@ async function recognizeFood(env, imageBase64, mimeType) {
         portion: String(f?.portion || '').trim().slice(0, 40),
         ingredients: Array.isArray(f?.ingredients) ? f.ingredients.map((i) => String(i).trim().slice(0, 40)).slice(0, 12) : [],
         confidence: clampNum(f?.confidence, 0, 1),
+        estimatedCalories: String(f?.estimatedCalories || '').trim().slice(0, 60) || null,
       })).filter((f) => f.name)
     : [];
 
@@ -294,6 +315,63 @@ function clampNum(v, min, max) {
   const n = Number(v);
   if (!Number.isFinite(n)) return min;
   return Math.min(max, Math.max(min, n));
+}
+
+/* ------------------------------ 智能助手 ------------------------------ */
+
+const CHAT_SYSTEM_PROMPT = [
+  '你是 FitLens 的健身与减脂智能助手。用简体中文回答，语气专业、务实、克制。',
+  '你的职责：',
+  '- 提供循序渐进的减脂方法、饮食记录建议、每周训练计划（频率/时长/休息安排）；',
+  '- 根据用户主动提供的信息（目标、经验、可用时间、场地、预算、器材、身体与记录数据）给出个性化初步建议，并说明你所依据的信息；',
+  '- 针对爬坡、跑步、跑楼梯、力量训练等具体训练给出可执行的安排；',
+  '- 推荐健身器材时，先了解预算、空间、训练经验和目标，说明选择理由、适用场景、替代方案与使用注意事项，不默认推荐昂贵器材。',
+  '安全边界（必须遵守）：',
+  '- 不提供极端节食或快速暴瘦方案，建议应循序渐进、包含休息与恢复；',
+  '- 不做疾病诊断、医疗处方或伤病治疗；',
+  '- 用户提到怀孕、慢性病、疼痛、受伤或饮食障碍等高风险情况时，建议咨询合格的医疗或营养专业人士，不给出冒险的训练指令；',
+  '- 不把卡路里赤字或运动消耗说成精确值，清楚说明是估算与假设；',
+  '- 信息不足时先提出少量关键问题，不擅自编造用户个人信息；',
+  '- 训练计划应包含每周安排、动作/训练类型、时长或组数、强度调整方式和休息日；用户无设备时提供徒手或低成本替代。',
+].join('\n');
+
+async function chatAssistant(env, messages) {
+  if (!env.DEEPSEEK_API_KEY) return { error: '智能助手未配置：请在服务端设置 DEEPSEEK_API_KEY' };
+  const history = (Array.isArray(messages) ? messages : [])
+    .filter((m) => m && (m.role === 'user' || m.role === 'assistant'))
+    .map((m) => ({ role: m.role, content: String(m.content || '').slice(0, 2000) }))
+    .slice(-12);
+  if (!history.some((m) => m.role === 'user')) return { error: '请输入你的问题' };
+
+  const baseUrl = (env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com').replace(/\/$/, '');
+  const body = {
+    model: env.DEEPSEEK_MODEL || 'deepseek-flash',
+    messages: [{ role: 'system', content: CHAT_SYSTEM_PROMPT }, ...history],
+    temperature: 0.6,
+    max_tokens: 1000,
+  };
+
+  let res;
+  try {
+    res = await fetch(`${baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${env.DEEPSEEK_API_KEY}` },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    return { error: '无法连接 AI 服务，请稍后重试' };
+  }
+
+  if (!res.ok) {
+    if (res.status === 401) return { error: 'DeepSeek API Key 无效，请检查服务端配置' };
+    if (res.status === 429) return { error: '助手请求过于频繁，请稍后重试' };
+    return { error: `AI 服务错误（${res.status}），请稍后重试` };
+  }
+
+  const j = await res.json().catch(() => null);
+  const content = j?.choices?.[0]?.message?.content;
+  if (!content) return { error: '助手未返回内容，请重试' };
+  return { reply: String(content).slice(0, 4000) };
 }
 
 /* ------------------------------ 认证 ------------------------------ */
@@ -438,7 +516,13 @@ const ROUTES = {
     if (imgErr) return json({ error: imgErr }, 400, h);
     const result = await recognizeFood(env, b.imageBase64, b.mimeType);
     if (result.error) return json({ error: result.error }, 502, h);
-    const foodsWithNutrition = result.foods.map((f) => ({ ...f, nutrition: calcNutrition(f.name, f.amount) }));
+    // 优先查营养数据库；查不到再用模型的粗略热量范围作为「AI 估算」兜底。
+    const foodsWithNutrition = result.foods.map((f) => {
+      const { estimatedCalories, ...rest } = f;
+      const nutrition = calcNutrition(f.name, f.amount);
+      if (nutrition) return { ...rest, matchTier: 'database', nutrition, calorieRange: null };
+      return { ...rest, matchTier: 'none', nutrition: null, calorieRange: estimatedCalories || null };
+    });
     return json({ foods: foodsWithNutrition, uncertainty: result.uncertainty }, 200, h);
   },
 
@@ -447,6 +531,21 @@ const ROUTES = {
     const b = await bodyJson(req);
     if (!b.name) return json({ error: '缺少食物名称' }, 400, h);
     return json({ nutrition: calcNutrition(b.name, Number(b.amount) || 0) }, 200, h);
+  },
+
+  'GET /api/foods/search': async (req, env, h) => {
+    await requireAuth(req, env);
+    const q = new URL(req.url).searchParams.get('q') || '';
+    return json({ foods: q.trim() ? searchFoods(q, 20) : [] }, 200, h);
+  },
+
+  'POST /api/chat': async (req, env, h) => {
+    const a = await requireAuth(req, env);
+    if (!rateLimit(`chat:${a.session.userId}`, 60000, 30)) return json({ error: '请求过于频繁，请稍后再试' }, 429, h);
+    const b = await bodyJson(req);
+    const result = await chatAssistant(env, b.messages);
+    if (result.error) return json({ error: result.error }, 502, h);
+    return json(result, 200, h);
   },
 };
 

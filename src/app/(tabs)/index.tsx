@@ -133,6 +133,12 @@ export default function HomeScreen() {
               />
             </View>
           </View>
+          <Button
+            title="问 AI 助手"
+            icon="chatbubbles-outline"
+            variant="ghost"
+            onPress={() => router.push('/assistant')}
+          />
 
           {/* 今日训练 */}
           <Card>
