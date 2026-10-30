@@ -218,11 +218,11 @@ export default function ProfileScreen() {
           <View style={styles.manageRows}>
             <Button title="加载示例数据" variant="secondary" icon="sparkles-outline" onPress={() => seedSampleData()} />
             <Button
-              title="清除本机数据"
+              title="清除所有数据"
               variant="secondary"
               icon="trash-outline"
               onPress={() =>
-                confirmDialog('清除数据', '将删除本机保存的所有记录并退出登录，确定继续？', () => clearAll())
+                confirmDialog('清除数据', '将删除服务器与本机保存的所有记录并退出登录，确定继续？', () => clearAll())
               }
             />
             <Button

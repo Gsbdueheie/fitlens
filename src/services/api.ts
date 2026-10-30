@@ -103,4 +103,6 @@ export const api = {
     request<{ records: import('@/lib/types').UserRecords }>('/api/records', { token }),
   putRecords: (token: string, records: import('@/lib/types').UserRecords) =>
     request<{ ok: boolean }>('/api/records', { method: 'PUT', token, body: { records } }),
+  deleteRecords: (token: string) =>
+    request<{ ok: boolean }>('/api/records', { method: 'DELETE', token }),
 };

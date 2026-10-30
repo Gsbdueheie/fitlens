@@ -327,6 +327,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
 
     async function clearAll() {
+      const token = session?.token;
+      // 先清空服务器记录并注销会话（best-effort，失败不阻断本机清除）。
+      if (token) {
+        try {
+          await api.deleteRecords(token);
+        } catch {
+          // 网络失败也继续本机清除
+        }
+        try {
+          await api.logout(token);
+        } catch {
+          // 同上
+        }
+      }
       setSession(null);
       setWorkouts([]);
       setFoods([]);

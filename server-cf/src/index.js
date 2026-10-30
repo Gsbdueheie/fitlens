@@ -684,6 +684,10 @@ async function putRecords(env, userId, records) {
   await env.FITLENS_KV.put(`records:${userId}`, JSON.stringify(records));
 }
 
+async function deleteRecords(env, userId) {
+  await env.FITLENS_KV.delete(`records:${userId}`);
+}
+
 /* ------------------------------ 路由 ------------------------------ */
 
 export default {
@@ -893,6 +897,12 @@ const ROUTES = {
     const b = await bodyJson(req);
     const records = sanitizeRecords(b.records);
     await putRecords(env, a.session.userId, records);
+    return json({ ok: true }, 200, h);
+  },
+
+  'DELETE /api/records': async (req, env, h) => {
+    const a = await requireAuth(req, env);
+    await deleteRecords(env, a.session.userId);
     return json({ ok: true }, 200, h);
   },
 };

@@ -7,7 +7,7 @@ import * as auth from './auth.js';
 import { recognizeFood } from './deepseek.js';
 import { calcNutrition, searchFoods } from './nutrition.js';
 import { chat } from './chat.js';
-import { getRecords, putRecords, updateUser } from './store.js';
+import { deleteRecords, getRecords, putRecords, updateUser } from './store.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -375,6 +375,11 @@ app.get('/api/records', requireAuth, (req, res) => {
 app.put('/api/records', requireAuth, async (req, res) => {
   const records = sanitizeRecords((req.body || {}).records);
   await putRecords(req.auth.user.id, records);
+  res.json({ ok: true });
+});
+
+app.delete('/api/records', requireAuth, async (req, res) => {
+  await deleteRecords(req.auth.user.id);
   res.json({ ok: true });
 });
 

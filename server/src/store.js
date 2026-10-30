@@ -108,3 +108,9 @@ export function putRecords(userId, records) {
   data.records[userId] = records;
   return persist();
 }
+
+export function deleteRecords(userId) {
+  ensureLoaded();
+  delete data.records[userId];
+  return persist();
+}
