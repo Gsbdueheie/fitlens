@@ -39,7 +39,7 @@ export interface AppState {
   register: (email: string, password: string, nickname: string, captchaId: string, captchaInput: string) => Promise<void>;
   logout: () => Promise<void>;
   updateNickname: (nickname: string) => Promise<void>;
-  updateProfile: (patch: ProfilePatch) => Promise<void>;
+  updateProfile: (patch: ProfilePatch & { nickname?: string }) => Promise<void>;
   updateAvatar: (imageBase64: string, mimeType: string) => Promise<void>;
 
   saveWorkout: (record: WorkoutRecord) => Promise<void>;
@@ -201,7 +201,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       await saveJSON(STORAGE_KEYS.session, { token, user: res.user });
     }
 
-    async function updateProfile(patch: ProfilePatch) {
+    async function updateProfile(patch: ProfilePatch & { nickname?: string }) {
       const token = session?.token;
       if (!token) return;
       const res = await api.updateMe(token, patch);

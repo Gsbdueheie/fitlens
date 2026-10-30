@@ -16,7 +16,7 @@ const GOALS: Goal[] = ['lose', 'maintain', 'gain'];
 
 export default function ProfileScreen() {
   const { colors } = useTheme();
-  const { profile, updateNickname, updateProfile, updateAvatar, logout, seedSampleData, clearAll } = useApp();
+  const { profile, updateProfile, updateAvatar, logout, seedSampleData, clearAll } = useApp();
 
   const [nickname, setNickname] = useState(profile?.nickname ?? '');
   const [goal, setGoal] = useState<Goal>(profile?.goal ?? 'lose');
@@ -69,8 +69,9 @@ export default function ProfileScreen() {
     setSaving(true);
     setError(null);
     try {
-      await updateNickname(nickname.trim() || 'FitLens 用户');
+      // 昵称 + 资料合并为一次 PATCH，减少往返，加快保存。
       await updateProfile({
+        nickname: nickname.trim() || 'FitLens 用户',
         goal,
         targetKcal: targetNum != null && !isNaN(targetNum) && targetNum > 0 ? Math.round(targetNum) : null,
         heightCm: heightNum != null && !isNaN(heightNum) && heightNum > 0 ? heightNum : null,

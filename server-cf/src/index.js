@@ -29,7 +29,7 @@ function corsHeaders(env, request) {
   const allowOrigin = allowed.includes('*') ? (origin || '*') : (allowed.includes(origin) ? origin : '');
   return {
     'Access-Control-Allow-Origin': allowOrigin,
-    'Access-Control-Allow-Methods': 'GET, POST, PATCH, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
   };
 }
