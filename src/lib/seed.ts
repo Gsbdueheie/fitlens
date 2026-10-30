@@ -91,7 +91,7 @@ export function buildSeedData(): SeedData {
       w(addDays(t, -5), '跑步', 30, 260, '5 公里慢跑', 'ok'),
       w(addDays(t, -4), '爬坡', 25, 220, '坡度 8% 快走', 'ok'),
       w(addDays(t, -3), '力量训练', 60, 380, '背 + 二头', 'great'),
-      w(addDays(t, -2), '跑楼梯', 20, 280, '楼梯 15 组', 'tired'),
+      w(addDays(t, -2), '楼梯机', 20, 280, '楼梯机 15 组', 'tired'),
       w(addDays(t, -1), '跑步', 35, 300, '间歇跑 4 组', 'tired'),
     ],
     foods: [

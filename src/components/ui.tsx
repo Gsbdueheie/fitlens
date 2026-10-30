@@ -33,7 +33,7 @@ const WORKOUT_ICONS: Record<string, IoniconName> = {
   游泳: 'water',
   瑜伽: 'accessibility',
   爬坡: 'trending-up',
-  跑楼梯: 'layers',
+  楼梯机: 'layers',
   其他: 'fitness',
 };
 

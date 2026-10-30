@@ -34,7 +34,7 @@ export interface ProfilePatch {
 export interface WorkoutRecord {
   id: string;
   date: string; // YYYY-MM-DD
-  type: string; // 训练类型（力量/跑步/骑行/游泳/瑜伽/爬坡/跑楼梯/其他）
+  type: string; // 训练类型（力量/跑步/骑行/游泳/瑜伽/爬坡/楼梯机/其他）
   durationMin: number;
   caloriesBurned: number | null; // kcal，可为空（未填写时界面显示「未记录」，不伪造）
   note: string;
@@ -198,6 +198,6 @@ export const WORKOUT_TYPES = [
   '游泳',
   '瑜伽',
   '爬坡',
-  '跑楼梯',
+  '楼梯机',
   '其他',
 ] as const;
