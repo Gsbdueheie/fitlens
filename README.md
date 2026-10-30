@@ -163,7 +163,7 @@ npx wrangler deploy                   # 部署，得到 https://fitlens-server.<
 | 变量 | 默认 | 说明 |
 |---|---|---|
 | `DEEPSEEK_API_KEY` | 空 | DeepSeek 密钥（**仅服务端**） |
-| `DEEPSEEK_MODEL` | `deepseek-flash` | 支持图片的视觉模型 |
+| `DEEPSEEK_MODEL` | `deepseek-chat` | 支持图片的视觉模型 |
 | `CAPTCHA_PROVIDER` | `builtin` | `builtin` 内置图形验证码 / `turnstile` |
 | `TURNSTILE_SECRET_KEY` | 空 | 使用 turnstile 时填写 |
 | `ALLOWED_ORIGINS` | `*` | 允许跨域来源 |
@@ -184,7 +184,7 @@ npx wrangler deploy                   # 部署，得到 https://fitlens-server.<
 
 ## AI 能力边界
 
-- 图片由**服务端**以 base64 转发给 DeepSeek 视觉模型（`deepseek-flash`），前端不接触密钥。
+- 图片由**服务端**以 base64 转发给 DeepSeek 视觉模型（`deepseek-chat`），前端不接触密钥。
 - 模型输出经过**结构化解析 + 字段校验 + 数值范围检查**，不直接信任。
 - **未配置 `DEEPSEEK_API_KEY` 或调用失败时，明确提示「AI 服务未配置 / 错误」，绝不返回固定/随机/静态映射的假识别结果。**
 - 营养由**内置食物营养表**按「确认后的食物名 + 份量」计算，标注来源与近似性；查不到时允许用户编辑，并提示「未查到营养数据」。
@@ -207,7 +207,7 @@ npx wrangler deploy                   # 部署，得到 https://fitlens-server.<
 ## 智能助手
 
 - 入口：首页「问 AI 助手」。通过服务端 `POST /api/chat` 调用模型，**密钥仅存服务端环境变量**（`DEEPSEEK_API_KEY`），前端不接触。
-- 模型：`DEEPSEEK_MODEL`（默认 `deepseek-flash`）。
+- 模型：`DEEPSEEK_MODEL`（默认 `deepseek-chat`）。
 - **数据权限**：助手**不自动读取/修改**用户的饮食、训练、身体数据；用户信息仅由用户在对话中主动提供；当前不提供「生成训练计划并保存」。
 - 能力边界：给减脂/训练/器材建议；不做疾病诊断、医疗处方；高风险情况建议就医；卡路里为估算，不当作精确值。
 - 未配置 `DEEPSEEK_API_KEY` 或调用失败时如实提示「助手未配置/错误」，不使用固定文案冒充 AI 对话。

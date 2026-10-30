@@ -36,7 +36,7 @@ const config = {
 
   deepseekApiKey: process.env.DEEPSEEK_API_KEY || '',
   deepseekBaseUrl: (process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com').replace(/\/$/, ''),
-  deepseekModel: process.env.DEEPSEEK_MODEL || 'deepseek-flash',
+  deepseekModel: process.env.DEEPSEEK_MODEL || 'deepseek-chat',
 
   sessionTtlMs: parseInt(process.env.SESSION_TTL_MS || String(7 * 24 * 3600 * 1000), 10),
 

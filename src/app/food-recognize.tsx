@@ -118,7 +118,7 @@ export default function FoodRecognizeScreen() {
           <Ionicons name="camera-outline" size={40} color={colors.textMuted} />
           <Text style={[styles.dropTitle, { color: colors.text }]}>拍摄或上传食物照片</Text>
           <Text style={[styles.dropDesc, { color: colors.textSecondary }]}>
-            图片将由服务端转发给 DeepSeek 视觉模型（deepseek-flash）识别，请确认结果后再保存
+            图片将由服务端转发给 DeepSeek 视觉模型识别，请确认结果后再保存
           </Text>
         </View>
       )}

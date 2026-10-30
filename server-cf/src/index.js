@@ -268,10 +268,10 @@ function log(kind, detail) {
 async function callModel(env, dataUrl, repair = false) {
   const baseUrl = (env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com').replace(/\/$/, '');
   const body = {
-    model: env.DEEPSEEK_MODEL || 'deepseek-flash',
+    model: env.DEEPSEEK_MODEL || 'deepseek-chat',
     messages: buildMessages(dataUrl, repair),
     temperature: 0.2,
-    max_tokens: 800,
+    max_tokens: 2000,
   };
 
   let res;
@@ -329,9 +329,6 @@ function extractContent(json) {
       .join('')
       .trim();
     if (text) return text;
-  }
-  if (typeof msg.reasoning_content === 'string' && msg.reasoning_content.trim()) {
-    return msg.reasoning_content;
   }
   return null;
 }
@@ -476,7 +473,7 @@ async function chatAssistant(env, messages) {
 
   const baseUrl = (env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com').replace(/\/$/, '');
   const body = {
-    model: env.DEEPSEEK_MODEL || 'deepseek-flash',
+    model: env.DEEPSEEK_MODEL || 'deepseek-chat',
     messages: [{ role: 'system', content: CHAT_SYSTEM_PROMPT }, ...history],
     temperature: 0.6,
     max_tokens: 1000,

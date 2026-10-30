@@ -5,7 +5,7 @@ import config from './config.js';
  * - 密钥仅从服务端环境变量 DEEPSEEK_API_KEY 读取，前端与仓库不接触。
  * - 图片由服务端以 base64 data URL 转发给模型（不把文件名/文字当图片）。
  * - 模型输出经过健壮的结构化提取 + 字段校验 + 数值范围检查，不直接信任模型。
- * 模型：deepseek-flash（DeepSeek-V4.1-Flash，原生多模态），
+ * 模型：deepseek-chat（DeepSeek 官方视觉模型，直接输出结果、不做冗长推理），
  * 文档：https://api-docs.deepseek.com/zh-cn/guides/vision/
  */
 
@@ -48,7 +48,7 @@ async function callModel(dataUrl, repair = false) {
     model: config.deepseekModel,
     messages: buildMessages(dataUrl, repair),
     temperature: 0.2,
-    max_tokens: 800,
+    max_tokens: 2000,
   };
 
   let res;
@@ -109,9 +109,6 @@ function extractContent(json) {
       .join('')
       .trim();
     if (text) return text;
-  }
-  if (typeof msg.reasoning_content === 'string' && msg.reasoning_content.trim()) {
-    return msg.reasoning_content;
   }
   return null;
 }
