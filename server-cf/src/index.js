@@ -272,7 +272,6 @@ async function callModel(env, dataUrl, repair = false) {
     messages: buildMessages(dataUrl, repair),
     temperature: 0.2,
     max_tokens: 800,
-    response_format: { type: 'json_object' },
   };
 
   let res;
@@ -302,12 +301,39 @@ async function callModel(env, dataUrl, repair = false) {
   }
 
   const j = await res.json().catch(() => null);
-  const content = j?.choices?.[0]?.message?.content;
+  const content = extractContent(j);
   if (!content) {
-    log('empty');
+    const msg = j?.choices?.[0]?.message;
+    log(
+      'empty',
+      JSON.stringify({
+        keys: msg ? Object.keys(msg) : null,
+        contentType: msg ? typeof msg.content : null,
+        contentArray: msg ? Array.isArray(msg.content) : null,
+        hasChoices: Array.isArray(j?.choices),
+      }),
+    );
     return { error: '模型未返回内容，请重试' };
   }
   return { content };
+}
+
+/** 兼容多种返回形态：字符串 content / 分段数组 content / reasoning_content。 */
+function extractContent(json) {
+  const msg = json?.choices?.[0]?.message;
+  if (!msg) return null;
+  if (typeof msg.content === 'string' && msg.content.trim()) return msg.content;
+  if (Array.isArray(msg.content)) {
+    const text = msg.content
+      .map((p) => (typeof p === 'string' ? p : p?.text || ''))
+      .join('')
+      .trim();
+    if (text) return text;
+  }
+  if (typeof msg.reasoning_content === 'string' && msg.reasoning_content.trim()) {
+    return msg.reasoning_content;
+  }
+  return null;
 }
 
 async function recognizeFood(env, imageBase64, mimeType) {
