@@ -201,7 +201,7 @@ export default function ProfileScreen() {
           <View style={styles.bulletRow}>
             <Text style={[styles.bullet, { color: colors.textMuted }]}>·</Text>
             <Text style={[styles.bulletText, { color: colors.textSecondary }]}>
-              账号与密码由服务端安全存储；训练/饮食/身体记录当前保存在本机（单设备），跨设备同步尚未实现。
+              账号、头像与个人资料（身高/体重/目标等）由服务端安全存储；训练/饮食/身体测量记录仍保存在本机（单设备），跨设备同步尚未实现。
             </Text>
           </View>
           <View style={styles.bulletRow}>
