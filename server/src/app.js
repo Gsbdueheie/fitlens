@@ -194,12 +194,12 @@ app.post('/api/recognize', requireAuth, async (req, res) => {
 
   // 优先查营养数据库；查不到再用模型的粗略热量范围作为「AI 估算」兜底。
   const foods = result.foods.map((f) => {
-    const { estimatedCalories, ...rest } = f;
+    const { estimate, ...rest } = f;
     const nutrition = calcNutrition(f.name, f.amount);
     if (nutrition) {
-      return { ...rest, matchTier: 'database', nutrition, calorieRange: null };
+      return { ...rest, matchTier: 'database', nutrition, estimate: null };
     }
-    return { ...rest, matchTier: 'none', nutrition: null, calorieRange: estimatedCalories || null };
+    return { ...rest, matchTier: 'none', nutrition: null, estimate: estimate ?? null };
   });
   res.json({ foods, uncertainty: result.uncertainty });
 });

@@ -233,14 +233,15 @@ function round1(n) {
 
 const SYSTEM_PROMPT = [
   '你是营养分析助手。请识别这张食物照片，只输出一个 JSON 对象（不要输出任何其他文字，不要用 Markdown 代码块），格式如下：',
-  '{"foods":[{"name":"食物名称（中文）","amount":"估算克数(数字)","portion":"份量描述，如 约一碗/约半盘/约一个拳头大小","ingredients":["可辨认的食材"],"confidence":0到1,"estimatedCalories":"约 300-500 千卡"}],"uncertainty":"关于份量与热量不确定性的简短中文说明"}',
+  '{"foods":[{"name":"食物名称（中文）","amount":"估算克数(数字)","portion":"份量描述，如 约一碗/约半盘/约一个拳头大小","ingredients":["可辨认的食材"],"confidence":0到1,"estimate":{"caloriesMin":1200,"caloriesMax":1800,"protein":30,"carbs":150,"fat":50,"basis":"按常见做法一人份估算，含油量影响较大"}}],"uncertainty":"关于份量与热量不确定性的简短中文说明"}',
   '要求：',
   '- 用常见参照物（碗/盘/拳头/手掌/筷子）估算份量，amount 给出可食部分克数，portion 给出文字描述；',
   '- 不要在名称或备注中使用「带壳/不带壳/去皮/去壳」等外观描述；食物名称保持简洁准确，份量按可食部分估算；若不确定可食部分，用中性表达说明「请确认可食部分重量」；',
   '- 份量克数是粗略估算，务必在 uncertainty 提醒用户核对份量；',
   '- 热量无法从照片精确测得，油、酱料、配方、隐藏食材都会影响热量；',
-  '- 不要输出精确的热量或营养数值；营养优先由服务端查营养数据库计算；',
-  '- 仅在无法给出常见食物名时，才在 estimatedCalories 给一个粗略热量范围（如「约 300-500 千卡」），该值仅作估算兜底；',
+  '- 营养优先由服务端查营养数据库计算；',
+  '- 仅在无法给出常见食物名（数据库查不到）时，才在 estimate 给出结构化估算：caloriesMin/caloriesMax 为该份的千卡范围（正整数），protein/carbs/fat 为克（不确定则省略或 null），basis 说明估算依据与假设；',
+  '- 若无法给出可信热量范围，estimate 中 caloriesMin/caloriesMax 用 null，不要编造；',
   '- 混合菜、遮挡、模糊或不确定时降低 confidence。',
 ].join('\n');
 
@@ -426,7 +427,7 @@ function parseResult(content) {
             ? f.ingredients.map((i) => String(i).trim().slice(0, 40)).slice(0, 12)
             : [],
           confidence: clampNum(f?.confidence, 0, 1),
-          estimatedCalories: String(f?.estimatedCalories || '').trim().slice(0, 60) || null,
+          estimate: parseEstimate(f?.estimate, f?.estimatedCalories),
         }))
         .filter((f) => f.name)
     : [];
@@ -436,6 +437,56 @@ function parseResult(content) {
   return {
     foods,
     uncertainty: String(obj.uncertainty || '照片无法精确判断份量与热量，请确认份量。').slice(0, 200),
+  };
+}
+
+/**
+ * 解析 AI 结构化估算（数据库未命中时的兜底）。
+ * 热量：caloriesMin/Max 必须为正整数；中点 = caloriesEstimate（明确规则）。
+ * 营养素：protein/carbs/fat 可为 0，缺失/null/非法则返回 null（不静默置 0）。
+ * 兼容旧字段 estimatedCalories（字符串范围）。返回 null 表示模型未给出可用估算。
+ */
+function parseEstimate(raw, legacyString) {
+  const calNum = (v) => {
+    if (v === null || v === undefined || v === '') return null;
+    const n = Number(v);
+    if (!Number.isFinite(n) || n <= 0) return null;
+    return Math.min(10000, Math.round(n));
+  };
+  const macroNum = (v) => {
+    if (v === null || v === undefined || v === '') return null;
+    const n = Number(v);
+    if (!Number.isFinite(n) || n < 0) return null;
+    return Math.min(2000, Math.round(n * 10) / 10);
+  };
+
+  let min = calNum(raw?.caloriesMin);
+  let max = calNum(raw?.caloriesMax);
+
+  if ((min == null || max == null) && legacyString) {
+    const nums = String(legacyString).match(/\d+/g)?.map(Number) ?? [];
+    if (min == null && max == null && nums.length >= 2) {
+      min = Math.min(nums[0], nums[1]);
+      max = Math.max(nums[0], nums[1]);
+    } else if (min == null && nums.length >= 1) {
+      min = nums[0];
+      max = max ?? nums[0];
+    }
+  }
+
+  if (min != null && max != null && min > max) [min, max] = [max, min];
+  const estimate = min != null && max != null ? Math.round((min + max) / 2) : (min ?? max);
+
+  if (min == null && max == null && estimate == null) return null;
+
+  return {
+    caloriesMin: min,
+    caloriesMax: max,
+    caloriesEstimate: estimate,
+    protein: macroNum(raw?.protein),
+    carbs: macroNum(raw?.carbs),
+    fat: macroNum(raw?.fat),
+    basis: String(raw?.basis || '').trim().slice(0, 120) || null,
   };
 }
 
@@ -646,10 +697,10 @@ const ROUTES = {
     if (result.error) return json({ error: result.error }, 502, h);
     // 优先查营养数据库；查不到再用模型的粗略热量范围作为「AI 估算」兜底。
     const foodsWithNutrition = result.foods.map((f) => {
-      const { estimatedCalories, ...rest } = f;
+      const { estimate, ...rest } = f;
       const nutrition = calcNutrition(f.name, f.amount);
-      if (nutrition) return { ...rest, matchTier: 'database', nutrition, calorieRange: null };
-      return { ...rest, matchTier: 'none', nutrition: null, calorieRange: estimatedCalories || null };
+      if (nutrition) return { ...rest, matchTier: 'database', nutrition, estimate: null };
+      return { ...rest, matchTier: 'none', nutrition: null, estimate: estimate ?? null };
     });
     return json({ foods: foodsWithNutrition, uncertainty: result.uncertainty }, 200, h);
   },

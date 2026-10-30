@@ -103,6 +103,16 @@ export interface NutritionEstimate {
   fat: number;
 }
 
+export interface AiEstimate {
+  caloriesMin: number | null;
+  caloriesMax: number | null;
+  caloriesEstimate: number | null; // 范围中点，作为默认记账近似值
+  protein: number | null;
+  carbs: number | null;
+  fat: number | null;
+  basis: string | null; // 估算依据与假设
+}
+
 export interface RecognizedFood {
   name: string;
   amount: number; // 估算份量克数
@@ -110,8 +120,8 @@ export interface RecognizedFood {
   ingredients: string[];
   confidence: number; // 0..1
   matchTier?: MatchTier; // database = 命中营养数据库；none = 未命中
-  nutrition: NutritionEstimate | null;
-  calorieRange?: string | null; // 数据库未命中时的 AI 粗略估算范围
+  nutrition: NutritionEstimate | null; // 数据库匹配结果
+  estimate?: AiEstimate | null; // 数据库未命中时的 AI 估算
 }
 
 export interface RecognizeResponse {

@@ -51,6 +51,11 @@ export default function FoodReviewScreen() {
   const existing = editId ? foods.find((f) => f.id === editId) : undefined;
   const [draft] = useState(() => getDraft());
   const rec = draft?.response.foods[0];
+  const recEstimate = rec?.estimate ?? null;
+  const recEstimateRange =
+    recEstimate?.caloriesMin != null || recEstimate?.caloriesMax != null
+      ? `约 ${recEstimate.caloriesMin ?? '?'}–${recEstimate.caloriesMax ?? '?'} 千卡`
+      : null;
 
   const isEdit = !!existing;
   const isRecognize = !!draft && !isEdit;
@@ -72,19 +77,28 @@ export default function FoodReviewScreen() {
     ? { calories: existing.calories, protein: existing.protein, carbs: existing.carbs, fat: existing.fat }
     : rec?.nutrition
       ? { calories: rec.nutrition.calories, protein: rec.nutrition.protein, carbs: rec.nutrition.carbs, fat: rec.nutrition.fat }
-      : null;
+      : recEstimate?.caloriesEstimate != null
+        ? {
+            calories: recEstimate.caloriesEstimate,
+            protein: recEstimate.protein,
+            carbs: recEstimate.carbs,
+            fat: recEstimate.fat,
+          }
+        : null;
 
   const [mealType, setMealType] = useState<MealType>(existing?.mealType ?? 'lunch');
   const [name, setName] = useState(existing?.foodName ?? rec?.name ?? '');
   const [amount, setAmount] = useState(String(initAmount));
-  // 无可靠营养数据时留空，避免把「缺失」误显示/保存为 0。
-  const [calories, setCalories] = useState(initNutri ? String(initNutri.calories) : '');
-  const [protein, setProtein] = useState(initNutri ? String(initNutri.protein) : '');
-  const [carbs, setCarbs] = useState(initNutri ? String(initNutri.carbs) : '');
-  const [fat, setFat] = useState(initNutri ? String(initNutri.fat) : '');
+  // 有数据库值或 AI 估算时预填；否则留空（不把「缺失」误显示/保存为 0）。
+  const [calories, setCalories] = useState(initNutri?.calories != null ? String(initNutri.calories) : '');
+  const [protein, setProtein] = useState(initNutri?.protein != null ? String(initNutri.protein) : '');
+  const [carbs, setCarbs] = useState(initNutri?.carbs != null ? String(initNutri.carbs) : '');
+  const [fat, setFat] = useState(initNutri?.fat != null ? String(initNutri.fat) : '');
   const [per100, setPer100] = useState<Per100g | null>(initPer100);
   const [nutritionSource, setNutritionSource] = useState<string | null>(
-    existing?.nutritionSource ?? rec?.nutrition?.source ?? null,
+    existing?.nutritionSource
+      ?? rec?.nutrition?.source
+      ?? (recEstimate ? (recEstimateRange ? `AI 估算（${recEstimateRange}）` : 'AI 估算') : null),
   );
   const [nameError, setNameError] = useState<string | null>(null);
   const [calError, setCalError] = useState<string | null>(null);
@@ -92,7 +106,10 @@ export default function FoodReviewScreen() {
   const [estimateMsg, setEstimateMsg] = useState<string | null>(null);
 
   const confidence = existing?.confidence ?? rec?.confidence ?? null;
-  const uncertaintyNote = existing?.uncertaintyNote ?? draft?.response.uncertainty ?? null;
+  const aiBasis = recEstimate?.basis ?? null;
+  const uncertaintyNote =
+    existing?.uncertaintyNote ??
+    ([draft?.response.uncertainty ?? null, aiBasis].filter(Boolean).join(' · ') || null);
   const imageUri = existing?.imageUri ?? draft?.imageUri ?? null;
   const ingredients = rec?.ingredients ?? [];
   const portion = rec?.portion ?? '';
@@ -268,7 +285,7 @@ export default function FoodReviewScreen() {
                 ) : null}
                 {rec?.matchTier === 'database' ? (
                   <Badge label="数据库匹配" color={colors.success} icon="checkmark-circle-outline" />
-                ) : rec?.calorieRange ? (
+                ) : recEstimate ? (
                   <Badge label="AI 估算" color={colors.warning} icon="alert-circle-outline" />
                 ) : (
                   <Badge label="未匹配库" color={colors.textMuted} />
@@ -280,11 +297,17 @@ export default function FoodReviewScreen() {
                   营养来源：{rec.nutrition.source}
                   {rec.nutrition.quality ? `（${QUALITY_LABEL[rec.nutrition.quality]}）` : ''}
                 </Text>
-              ) : rec?.calorieRange ? (
+              ) : recEstimate ? (
                 <Text style={[styles.sourceNote, { color: colors.warning }]}>
-                  AI 估算热量范围：{rec.calorieRange}（请核对后再保存）
+                  {recEstimateRange ? `AI 估算：${recEstimateRange}` : 'AI 估算'}
+                  {recEstimate.caloriesEstimate != null ? ` · 默认按中点 ${recEstimate.caloriesEstimate} 千卡` : ''}
+                  {recEstimate.basis ? ` · ${recEstimate.basis}` : ''}
                 </Text>
-              ) : null}
+              ) : (
+                <Text style={[styles.sourceNote, { color: colors.warning }]}>
+                  暂无法估算热量，请补充份量/配方，或点「搜索食物库」/手动填写
+                </Text>
+              )}
               {ingredients.length > 0 ? (
                 <View style={styles.ingredients}>
                   {ingredients.map((ing, i) => (
