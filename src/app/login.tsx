@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Image, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Button, Card, Field, Screen } from '@/components/ui';
 import { radius, spacing, useTheme, fontSize } from '@/constants/theme';
@@ -51,8 +51,8 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
-  const { width } = useWindowDimensions();
-  const isWide = width >= 560; // 桌面并排，窄屏（手机）上下排列
+  // 确认密码即时校验：一旦输入了确认密码且与密码不一致，立即在输入框下方提示。
+  const confirmMismatch = mode === 'register' && confirm.length > 0 && password !== confirm;
 
   const passwordRules = PASSWORD_RULES.map((r) => ({ ...r, ok: r.test(password) }));
 
@@ -167,40 +167,27 @@ export default function LoginScreen() {
           <Field label="昵称" value={nickname} onChangeText={setNickname} placeholder="你的昵称" maxLength={20} />
         ) : null}
 
-        {/* 密码与确认密码相邻：桌面并排、窄屏上下，中间不插入其它字段 */}
+        {/* 密码在上、确认密码在下一行，两项相邻且始终上下排列 */}
+        <Field
+          label="密码"
+          value={password}
+          onChangeText={setPassword}
+          placeholder="至少 8 位，含字母和数字"
+          secureTextEntry={!showPassword}
+          right={<EyeToggle show={showPassword} onPress={() => setShowPassword((v) => !v)} label="密码" />}
+        />
+
         {mode === 'register' ? (
-          <View style={[styles.pwRow, !isWide && styles.pwCol]}>
-            <View style={styles.pwCell}>
-              <Field
-                label="密码"
-                value={password}
-                onChangeText={setPassword}
-                placeholder="至少 8 位，含字母和数字"
-                secureTextEntry={!showPassword}
-                right={<EyeToggle show={showPassword} onPress={() => setShowPassword((v) => !v)} label="密码" />}
-              />
-            </View>
-            <View style={styles.pwCell}>
-              <Field
-                label="确认密码"
-                value={confirm}
-                onChangeText={setConfirm}
-                placeholder="再次输入密码"
-                secureTextEntry={!showConfirm}
-                right={<EyeToggle show={showConfirm} onPress={() => setShowConfirm((v) => !v)} label="确认密码" />}
-              />
-            </View>
-          </View>
-        ) : (
           <Field
-            label="密码"
-            value={password}
-            onChangeText={setPassword}
-            placeholder="至少 8 位，含字母和数字"
-            secureTextEntry={!showPassword}
-            right={<EyeToggle show={showPassword} onPress={() => setShowPassword((v) => !v)} label="密码" />}
+            label="确认密码"
+            value={confirm}
+            onChangeText={setConfirm}
+            placeholder="再次输入密码"
+            secureTextEntry={!showConfirm}
+            error={confirmMismatch ? '两次输入的密码不一致' : null}
+            right={<EyeToggle show={showConfirm} onPress={() => setShowConfirm((v) => !v)} label="确认密码" />}
           />
-        )}
+        ) : null}
 
         {mode === 'register' ? (
           <View style={styles.rules}>
@@ -217,10 +204,6 @@ export default function LoginScreen() {
               </View>
             ))}
           </View>
-        ) : null}
-
-        {mode === 'register' && confirm.length > 0 && password !== confirm ? (
-          <Text style={[styles.pwMismatch, { color: colors.warning }]}>两次输入的密码不一致</Text>
         ) : null}
 
         {/* 图形验证码 */}
@@ -272,10 +255,6 @@ const styles = StyleSheet.create({
   modeBtn: { flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: radius.md },
   modeText: { fontSize: fontSize.sm, fontWeight: '600' },
   label: { fontSize: fontSize.sm, fontWeight: '600' },
-  pwRow: { flexDirection: 'row', gap: spacing.md },
-  pwCol: { flexDirection: 'column' },
-  pwCell: { flex: 1 },
-  pwMismatch: { fontSize: fontSize.xs, marginTop: -spacing.xs, marginBottom: spacing.sm },
   rules: { gap: 2, marginTop: -spacing.xs, marginBottom: spacing.sm },
   ruleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   ruleText: { fontSize: fontSize.xs },
